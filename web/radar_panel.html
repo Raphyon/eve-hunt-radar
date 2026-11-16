@@ -1,0 +1,59 @@
+  <div id="radar">
+   <h1>Hunt radar <span class="sub">__VERSION__</span></h1>
+   <div class="sub" id="rStatus">connecting…</div>
+   <h2>App</h2>
+   <div class="sub" id="updSt">…</div>
+   <div class="row"><button id="updCheck">Check for updates</button><button id="updGo" style="display:none">Restart to update</button></div>
+   <label class="chk"><input type="checkbox" id="autoSt"> Start Hunt Radar with Windows</label>
+   <div class="row"><button id="impOld">Import settings from old zip version</button><button id="openData">Open settings folder</button></div>
+   <h2>Overlay &amp; hotkeys</h2>
+   <div class="row"><button id="ovEdit">Edit / move overlay</button><button id="ovMode">Strip ↔ Mini-map</button><button id="ovTest">Test sounds</button></div>
+   <label>Overlay opacity <span id="opV" class="sub"></span></label><input id="ovOp" type="range" min="0.4" max="1" step="0.02" style="width:100%">
+   <label>Mini-map radius</label><select id="ovJ"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select>
+   <label class="chk"><input type="checkbox" id="sndOn" checked> Alert sounds</label>
+   <table class="keys">
+    <tr><td>Edit / lock overlay</td><td><input id="kEdit" type="text"></td><td id="kEditS" class="sub"></td></tr>
+    <tr><td>Strip ↔ mini-map</td><td><input id="kMode" type="text"></td><td id="kModeS" class="sub"></td></tr>
+   </table>
+   <div class="sub">Click a box and press the keys you want. Saved automatically.</div>
+   <h2>Jump drive toons (ESI)</h2>
+   <div class="sub">Log in your blops / capital toons. While ESI says one sits in a jump-drive hull, alerts and Best nearby get <b style="color:#3ddc84">⤳✓</b> when the system is in range (uses each toon's real Jump Drive Calibration level), and in-range lowsec gets a dashed violet ring.</div>
+   <table id="jt" class="keys"></table>
+   <div id="jumpSt" class="sub" style="margin-top:4px"></div>
+   <label>ESI Client ID <span class="sub">(developers.eveonline.com · callback <code>http://localhost:8765/callback</code> · scopes <code>esi-location.read_ship_type.v1</code> + <code>esi-skills.read_skills.v1</code>)</span></label>
+   <input id="esiCid" type="text" placeholder="paste Client ID">
+   <div class="row"><button id="esiSave">Save</button><button id="esiLogin">Log in a character</button></div>
+   <h2>Pilot lookup</h2>
+   <label class="chk"><input type="checkbox" id="luOn" checked> Middle-click a name in Local → zKill card</label>
+   <div class="sub">Uses the Local area you mark below. The click still goes to EVE as normal; only that one row is read (OCR).</div>
+   <h2>Local snapshot key</h2>
+   <label class="chk"><input type="checkbox" id="snOn"> Enable snapshot key</label>
+   <table class="keys"><tr><td>Key</td><td><input id="kSnap" type="text"></td><td id="kSnapS" class="sub"></td></tr></table>
+   <label>Mode</label><select id="snMode"><option>Screenshot</option><option>Ctrl+A, Ctrl+C</option></select>
+   <div class="sub" id="snHelp"></div>
+   <div class="row"><button id="snPick">Mark Local area</button><button id="snTest">Snapshot now</button></div>
+   <div class="sub" id="snMsg"></div>
+   <h2>Your characters</h2>
+   <div id="chars"></div>
+   <details class="sub" style="margin-top:4px"><summary>Chat log folder</summary>Found from EVE's chat logs (ESC → Chat → "Log Chat to File" must be on). Only set this if it isn't found:<input id="clDir" type="text" style="margin-top:4px"><div class="row"><button id="clSave">Save</button></div></details>
+   <h2>Best nearby</h2>
+   <div class="sub" style="margin-bottom:4px">Lowsec within 6 jumps of the character you're flying, ranked by ratting (NPC kills/h), recent watched-ship kills and PvP.</div>
+   <table id="best"></table>
+   <h2>Local</h2>
+   <div id="local"></div>
+   <h2>Alert on these ships</h2>
+   <div id="classes" class="cls"></div>
+   <label class="chk"><input type="checkbox" id="pVictim" checked> Also alert when one of them is the victim</label>
+   <label class="chk"><input type="checkbox" id="pNear" checked> <b>Near-me alert</b> (special sound): any lowsec PvP kill within
+     <select id="pNearR" style="width:auto;display:inline"><option>2</option><option>3</option><option>4</option><option selected>5</option><option>7</option></select> jumps of the character you're flying</label>
+   <label>Watched-ship alert range from your targets or characters</label>
+   <select id="pRange"><option value="99">Whole map</option><option value="5">≤ 5 jumps</option><option value="3" selected>≤ 3 jumps</option><option value="1">≤ 1 jump</option></select>
+   <label>Heat (ESI, last hour)</label>
+   <select id="heatMode"><option value="off">Off</option><option value="j">Jumps</option><option value="k">Ship kills</option><option value="n" selected>NPC kills (ratting)</option></select>
+   <h2>Busiest lowsec, last hour (ESI)</h2>
+   <div class="sub" style="margin-bottom:4px">ESI updates this once an hour, so the numbers shift on the hour.</div>
+   <table id="busy"></table>
+   <h2>PvP in lowsec <span id="fCount"></span></h2>
+   <label class="chk"><input type="checkbox" id="fOnly"> Only show kills with the ships above</label>
+   <div id="feed"></div>
+  </div>

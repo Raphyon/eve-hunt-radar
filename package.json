@@ -1,0 +1,48 @@
+{
+  "name": "eve-hunt-radar",
+  "productName": "Hunt Radar",
+  "version": "9.5.0",
+  "description": "Lowsec hunting overlay for EVE Online (Genesis / Kor-Azor / Kador)",
+  "author": "Raphyon",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "src/main.js",
+  "repository": { "type": "git", "url": "https://github.com/Raphyon/eve-hunt-radar.git" },
+  "scripts": {
+    "build:map": "node scripts/build-map.js",
+    "start": "npm run build:map && electron .",
+    "dist": "npm run build:map && electron-builder --win --x64 --publish never",
+    "release": "npm run build:map && electron-builder --win --x64 --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "electron": "45.3.3",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "no.raphyon.huntradar",
+    "productName": "Hunt Radar",
+    "copyright": "Raphyon",
+    "files": ["src/**/*", "package.json"],
+    "asarUnpack": ["src/win.ps1"],
+    "directories": { "output": "dist", "buildResources": "build" },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico",
+      "artifactName": "HuntRadar-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Hunt Radar",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "electronLanguages": ["en-US"],
+    "publish": [{ "provider": "github", "owner": "Raphyon", "repo": "eve-hunt-radar", "releaseType": "release" }]
+  }
+}

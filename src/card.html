@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Pilot</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:transparent;overflow:hidden;font:12px/1.35 "Segoe UI",system-ui,sans-serif;color:#e6ebf0;user-select:none}
+#c{position:absolute;inset:0;border-radius:12px;background:rgba(10,13,17,.92);border:1px solid rgba(255,255,255,.12);padding:10px 12px;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+#c>*{flex-shrink:0}
+.hd{display:flex;align-items:flex-start;gap:8px}
+.nm{font-size:15px;font-weight:800;line-height:1.2}
+.co{color:#8b96a2;font-size:11.5px}
+.x{margin-left:auto;cursor:pointer;color:#8b96a2;font-size:18px;line-height:1;padding:2px 8px;border-radius:6px}.x:hover{color:#fff;background:rgba(255,255,255,.1)}
+.bar{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}.bar i{display:block;height:100%}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.grid b{display:block;font-size:15px}.grid span{color:#8b96a2;font-size:10.5px}
+h4{margin:2px 0 0;font-size:10px;letter-spacing:.08em;color:#8b96a2;text-transform:uppercase}
+.ln{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35}
+.amb{color:#ffb020}.pnk{color:#ff3bd4;font-weight:700}.mut{color:#8b96a2}
+a{color:#9cc9ff;text-decoration:none}a:hover{text-decoration:underline}
+.ft{margin-top:auto;display:flex;justify-content:space-between;align-items:center}
+.spin{color:#8b96a2;font-size:13px;margin:auto 0;text-align:center}
+</style></head><body><div id="c"><div class="spin">…</div></div>
+<script>
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const n = v => v == null ? "–" : v >= 1e9 ? (v / 1e9).toFixed(1) + "b" : v >= 1e6 ? Math.round(v / 1e6) + "m" : v >= 1e4 ? Math.round(v / 1e3) + "k" : String(v);
+const ago = t => { const s = (Date.now() - Date.parse(t)) / 1000; return s < 5400 ? Math.round(s / 60) + "m" : Math.round(s / 3600) + "h"; };
+const close = () => fetch("/cmd", { method: "POST", body: JSON.stringify({ cmd: "cardclose" }) });
+let v = 0;
+async function poll() {
+  try {
+    const d = await (await fetch("/cardstate")).json();
+    if (d.v && d.v !== v) { v = d.v; render(d); }
+  } catch (e) { }
+}
+function render(d) {
+  const C = document.getElementById("c");
+  const x = `<span class="x" id="x">✕</span>`;
+  if (d.state === "reading" || d.state === "loading") { C.innerHTML = `<div class="hd"><div class="nm">${esc(d.name || "Reading Local…")}</div>${x}</div><div class="spin">${d.state === "reading" ? "reading the name…" : "looking up zKillboard…"}</div>`; }
+  else if (d.state === "error") { C.innerHTML = `<div class="hd"><div class="nm">Couldn't look that up</div>${x}</div><div class="mut">${esc(d.msg)}</div><div class="mut">Tip: middle-click right on the name text. Wider Local / bigger font helps the OCR.</div>`; }
+  else {
+    const s = d.st || {}, dg = s.danger, col = dg == null ? "#59626c" : dg >= 70 ? "#ff3b30" : dg >= 40 ? "#ff9a2b" : "#3ddc84";
+    C.innerHTML = `<div class="hd"><div><div class="nm">${esc(d.name)}</div><div class="co">${esc(d.corp || "")}${d.alli ? " · " + esc(d.alli) : ""}</div></div>${x}</div>
+      <div><div class="ln"><b style="color:${col}">${dg == null ? "no zKill danger rating" : "Danger " + dg + "%"}</b>${s.gang != null ? ` <span class="mut">· gang ${s.gang}% · solo ${100 - s.gang}%</span>` : ""}</div>
+      <div class="bar"><i style="width:${dg ?? 0}%;background:${col}"></i></div></div>
+      <div class="grid"><div><b>${n(s.kills)}</b><span>kills</span></div><div><b>${n(s.losses)}</b><span>losses</span></div><div><b>${n(s.solo)}</b><span>solo</span></div><div><b>${n(s.active)}</b><span>kills 7d</span></div></div>
+      ${(d.seen || []).length ? `<h4>Seen here recently</h4>` + d.seen.map(z => `<div class="ln ${z.watched && z.role === "attacker" ? "pnk" : "amb"}">${z.role} in ${esc(z.ship)} @ ${esc(z.sys)} · ${ago(z.t)} ago</div>`).join("") : ""}
+      ${(s.ships || []).length ? `<h4>Top ships</h4><div class="ln">${s.ships.map(z => esc(z.name) + (z.kills != null ? ` <span class="mut">${z.kills}</span>` : "")).join(" · ")}</div>` : ""}
+      ${(s.systems || []).length ? `<h4>Top systems</h4><div class="ln">${s.systems.map(z => esc(z.name) + (z.kills != null ? ` <span class="mut">${z.kills}</span>` : "")).join(" · ")}</div>` : ""}
+      <div class="ft"><span class="mut">${d.zk ? "zKillboard stats" : "zKill unavailable"}</span><a href="${esc(d.link)}" target="_blank">open zKill ↗</a></div>`;
+  }
+  const xb = document.getElementById("x"); if (xb) xb.addEventListener("mousedown", e => { e.preventDefault(); close(); });
+}
+// close on: ✕, Esc, right-click or double-click anywhere on the card (links still work)
+document.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+document.addEventListener("contextmenu", e => { e.preventDefault(); close(); });
+document.addEventListener("dblclick", close);
+poll(); setInterval(poll, 300);
+</script></body></html>

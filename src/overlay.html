@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Hunt Radar overlay</title>
+<style>
+:root{--op:.82;--txt:#e6ebf0;--mut:#8b96a2;--low:#e0863a;--red:#ff3b30;--pnk:#ff3bd4;--grn:#3ddc84;--amb:#ffb020}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:transparent;overflow:hidden;font:12px/1.3 "Segoe UI",system-ui,sans-serif;color:var(--txt);user-select:none}
+#wrap{position:absolute;inset:0;border-radius:12px;background:rgba(10,13,17,var(--op));border:1px solid rgba(255,255,255,.09);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);overflow:hidden;display:flex;flex-direction:column;transition:border-color .2s,box-shadow .2s}
+#wrap.flashW{border-color:var(--pnk);box-shadow:0 0 0 2px var(--pnk) inset}
+#wrap.flashN{border-color:var(--red);box-shadow:0 0 0 2px var(--red) inset}
+#wrap.edit{border:1.5px dashed var(--amb)}
+#bar{display:none;align-items:center;gap:6px;padding:4px 8px;background:rgba(255,176,32,.14);-webkit-app-region:drag;font-size:11px;color:var(--amb)}
+#wrap.edit #bar{display:flex}
+#bar button{-webkit-app-region:no-drag;background:rgba(255,255,255,.08);color:var(--txt);border:1px solid rgba(255,255,255,.14);border-radius:5px;padding:2px 7px;font:11px "Segoe UI",sans-serif;cursor:pointer}
+#bar button:hover{background:rgba(255,255,255,.16)}
+#bar .sp{flex:1}
+.row{display:flex;align-items:center;gap:10px;padding:0 12px;white-space:nowrap;overflow:hidden}
+#top{height:30px;font-size:13px}
+.me{font-weight:700}.sys{font-weight:800;font-size:14px}.sec{color:var(--mut);font-size:11px}
+.lowc{color:var(--low)}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:10px;background:rgba(255,255,255,.07);font-weight:600}
+.pill.hot{background:rgba(255,59,212,.22);color:#ffd2f5}
+.pill.near{background:rgba(255,59,48,.25);color:#ffd7d4}
+.mut{color:var(--mut)}
+#line2{height:26px;font-size:12px;border-top:1px solid rgba(255,255,255,.06)}
+.al{font-weight:700}.al.w{color:var(--pnk)}.al.n{color:#ff6b62}
+#jump{display:none;min-height:24px;font-size:12px;border-top:1px solid rgba(255,255,255,.06);flex-wrap:wrap;row-gap:2px;padding-top:3px;padding-bottom:3px;white-space:normal}
+#jump.on{display:flex}
+.jt{color:#c4b5fd;font-weight:700}.ok{color:#3ddc84;font-weight:700}.no{color:#ff6b62;font-weight:700}
+#mm{display:none;flex:1;min-height:0}
+#wrap.map #mm{display:block}
+#wrap.map #line2{display:none}
+svg{width:100%;height:100%;display:block}
+#alist{display:none;padding:3px 10px 5px;border-top:1px solid rgba(255,255,255,.06);font-size:11.5px;max-height:58px;overflow:hidden}
+#wrap.map #alist{display:block}
+#alist div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#snap{position:absolute;right:10px;bottom:6px;font-size:11px;color:var(--amb);display:none}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+</style></head>
+<body>
+<div id="wrap">
+  <div id="bar"><b>EDIT</b><span>drag to move · resize from the edges</span><span class="sp"></span>
+    <button id="bMode">Mini-map</button><button id="bMap">Map & settings</button><button id="bLock">Lock 🔒</button></div>
+  <div id="top" class="row"></div>
+  <div id="line2" class="row"></div>
+  <div id="mm"><svg id="svg"></svg></div>
+  <div id="jump" class="row"></div>
+  <div id="alist"></div>
+  <div id="snap"></div>
+</div>
+<script>
+const DATA = __DATA__, GC = __SHIPS__;
+const S = {}; DATA.sys.forEach(s => S[s.id] = s);
+const ADJ = {}; DATA.sys.forEach(s => ADJ[s.id] = []); DATA.gates.forEach(([a, b]) => { ADJ[a].push(b); ADJ[b].push(a); });
+const dispSec = s => (s > 0 && s < 0.05) ? 0.1 : Math.floor(s * 10 + 0.5) / 10;
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const el = (t, a, p) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; };
+const ago = t => { const s = Math.round(Date.now() / 1000 - t); return s < 90 ? s + "s" : s < 5400 ? Math.round(s / 60) + "m" : Math.round(s / 3600) + "h"; };
+function bfs(src, maxd) { const d = { [src]: 0 }, q = [src]; while (q.length) { const u = q.shift(); if (d[u] >= maxd) continue; for (const v of ADJ[u]) if (d[v] === undefined) { d[v] = d[u] + 1; q.push(v); } } return d; }
+const cmd = (c, extra) => fetch("/cmd", { method: "POST", body: JSON.stringify(Object.assign({ cmd: c }, extra || {})) });
+$("bMap").onclick = () => cmd("map"); $("bLock").onclick = () => cmd("lock"); $("bMode").onclick = () => cmd("mode");
+
+// ---- sound
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+function tone(seq) { const t0 = AC.currentTime; let t = t0; seq.forEach(([f, ms]) => { if (f) { const o = AC.createOscillator(), g = AC.createGain(); o.type = "triangle"; o.frequency.value = f; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.35, t + .015); g.gain.exponentialRampToValueAtTime(.001, t + ms / 1000); o.connect(g).connect(AC.destination); o.start(t); o.stop(t + ms / 1000 + .02); } t += ms / 1000 + .03; }); }
+const SND = { watched: [[1000, 120], [1400, 120], [1000, 140]], victim: [[800, 150]], near: [[440, 220], [0, 50], [440, 220], [0, 50], [660, 380]] };
+function play(kind) { AC.resume(); if (kind === "both") { tone(SND.near); setTimeout(() => tone(SND.watched), 1100); } else tone(SND[kind]); }
+
+const ST = { last: 0, alast: -1, evs: [], d: null, flashT: 0 };
+function watchedP(p, st) { const c = GC[p.group]; return c && st.settings.classes[c] !== false; }
+function hitEv(e, st) { return dispSec(S[e.sys].s) < 0.5 && (e.attackers.some(p => watchedP(p, st)) || (st.settings.victim && watchedP(e.victim, st))); }
+
+const dtxt = a => a.meDist != null ? `${a.meDist}j from you` : `${a.dist}j from ${esc(a.near)}`;
+function jumpHtml(J) {
+  return J.map(j => `<span class="jt">⤳ ${esc(j.name)}</span><span class="mut">${esc(j.clsName)} ${j.range} LY ${j.jdcKnown ? "(JDC " + j.jdc + ")" : "(JDC V assumed)"} · ${esc(j.sysName || "?")}</span>` +
+    (j.known ? `<span class="mut">${j.inRange.length} lowsec systems in range</span>` : `<span class="mut">locating…</span>`)).join("<span style='flex-basis:100%;height:0'></span>");
+}
+const jtag = a => (a.jumpers || []).length ? ` <span class="ok" title="in jump range of ${esc(a.jumpers.join(", "))}">⤳✓</span>` : "";
+function render() {
+  const d = ST.d; if (!d) return;
+  const W = $("wrap"); W.style.setProperty("--op", d.settings.overlay.opacity ?? .82);
+  W.classList.toggle("edit", d.ui.edit); W.classList.toggle("map", d.ui.mode === "map");
+  $("bMode").textContent = d.ui.mode === "map" ? "Strip" : "Mini-map";
+  if (Date.now() - ST.flashT > 4000) W.classList.remove("flashW", "flashN");
+  const me = d.chars.find(c => c.active) || d.chars.find(c => c.running);
+  const L = d.local, lp = (L.pilots || []).filter(p => !p.me), hot = lp.filter(p => p.hot).length;
+  const lfresh = L.t && (Date.now() / 1000 - L.t) < 1800 && (!me || L.sys === me.sys);
+  const recentAl = d.recentAlerts || [];
+  const nearCount = recentAl.filter(a => a.nearMe && Date.now() / 1000 - a.t < 600).length;
+  let top = "";
+  if (me) {
+    top += `<span class="dot" style="background:var(--grn)"></span><span class="me">${esc(me.name)}</span>`;
+    top += me.sysName ? `<span class="sys ${me.sec != null && me.sec < .5 ? "lowc" : ""}">${esc(me.sysName)}</span><span class="sec">${me.sec != null ? me.sec.toFixed(1) : ""}</span>` : `<span class="mut">jump once to locate</span>`;
+  } else top += `<span class="mut">${esc(d.chatlogs.err || "no EVE client found")}</span>`;
+  top += lfresh ? `<span class="pill ${hot ? "hot" : ""}">👥 ${L.count}${hot ? ` · ⚠ ${hot}` : ""}</span>` : `<span class="pill mut">👥 –</span>`;
+  if (nearCount) top += `<span class="pill near">◉ ${nearCount} near</span>`;
+  const fresh = d.status.feed === "live" ? "" : `<span class="mut">feed: ${esc(d.status.feed)}</span>`;
+  top += `<span style="flex:1"></span>${fresh}`;
+  $("top").innerHTML = top;
+  // line 2: newest alert < 10 min, else best nearby
+  const a = recentAl.length ? recentAl[recentAl.length - 1] : null;
+  if (a && Date.now() / 1000 - a.t < 600) {
+    $("line2").innerHTML = `<span class="al ${a.nearMe ? "n" : "w"}">${a.nearMe ? "◉" : "⚠"} ${esc(a.sysName)}</span><span class="mut">${dtxt(a)} · ${ago(a.t)}</span>${jtag(a)}<span>${esc(a.what)}</span>`;
+  } else {
+    const b = (d.best || []).slice(0, 3);
+    $("line2").innerHTML = b.length ? `<span class="mut">Best:</span>` + b.map(r => `<span><b>${esc(r.n)}</b> <span class="mut">${r.j}j${r.npc ? " · NPC " + r.npc : ""}${r.kills ? " · kills " + r.kills : ""}</span>${jtag(r)}</span>`).join("") : `<span class="mut">quiet — no activity data near you yet</span>`;
+  }
+  // alert list (map mode)
+  $("alist").innerHTML = recentAl.slice(-3).reverse().map(a => `<div><span class="al ${a.nearMe ? "n" : "w"}">${a.nearMe ? "◉" : "⚠"} ${esc(a.sysName)}</span> <span class="mut">${dtxt(a)} · ${ago(a.t)}</span>${jtag(a)} ${esc(a.what)}</div>`).join("") || `<div class="mut">No alerts yet.</div>`;
+  const J = d.jump || []; $("jump").classList.toggle("on", J.length > 0); $("jump").innerHTML = jumpHtml(J);
+  const sn = d.snap; const sv = sn.msg && Date.now() / 1000 - sn.t < 15;
+  $("snap").style.display = sv ? "block" : "none"; $("snap").textContent = sv ? sn.msg : "";
+  if (d.ui.mode === "map") drawMini(d, me);
+  else {   // strip: grow/shrink the window to fit the rows
+    const h = [...W.children].filter(c => c.offsetParent !== null && c.id !== "snap").reduce((t, c) => t + c.offsetHeight, 0) + 4;
+    if (Math.abs(h - window.innerHeight) > 2 && h !== ST.lastH) { ST.lastH = h; cmd("resize", { h }); }
+  }
+}
+
+// Own layout for the mini-map: force-directed around your system, seeded from the big map so the
+// orientation still feels familiar. Cached per (center, radius).
+const LAYOUT = {};
+function miniLayout(center, ids) {
+  const key = center + ":" + ids.length; if (LAYOUT[key]) return LAYOUT[key];
+  let seed = center % 2147483647 || 1; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;   // same layout every time
+  const set = new Set(ids), K = 70, cx = S[center].x * 1.55, cy = S[center].y * 1.25;
+  const p = {}; ids.forEach(id => { p[id] = [(S[id].x * 1.55 - cx) * .5 + (rnd() - .5), (S[id].y * 1.25 - cy) * .5 + (rnd() - .5)]; });
+  const E = DATA.gates.filter(([a, b]) => set.has(a) && set.has(b));
+  let T = 60;
+  for (let it = 0; it < 350; it++) {
+    const f = {}; ids.forEach(id => f[id] = [0, 0]);
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+      const a = ids[i], b = ids[j]; let dx = p[a][0] - p[b][0], dy = p[a][1] - p[b][1]; let dd = Math.hypot(dx, dy) || .01;
+      const r = K * K / dd; f[a][0] += dx / dd * r; f[a][1] += dy / dd * r; f[b][0] -= dx / dd * r; f[b][1] -= dy / dd * r;
+    }
+    E.forEach(([a, b]) => { const dx = p[a][0] - p[b][0], dy = p[a][1] - p[b][1], dd = Math.hypot(dx, dy) || .01, at = dd * dd / K;
+      f[a][0] -= dx / dd * at; f[a][1] -= dy / dd * at; f[b][0] += dx / dd * at; f[b][1] += dy / dd * at; });
+    ids.forEach(id => { if (id === center) return; const [fx, fy] = f[id], m = Math.hypot(fx, fy) || .01; p[id][0] += fx / m * Math.min(m, T); p[id][1] += fy / m * Math.min(m, T); });
+    p[center] = [0, 0]; T = Math.max(1, T * .985);
+  }
+  return LAYOUT[key] = p;
+}
+function drawMini(d, me) {
+  const svg = $("svg"); svg.innerHTML = "";
+  const J = d.settings.overlay.mapJumps || 4;
+  let center = me && me.inMap ? me.sys : null;
+  if (!center) { const t = (d.settings.camp || "").split(",")[0].trim().toLowerCase(); const s = DATA.sys.find(x => x.n.toLowerCase() === t); center = s ? s.id : DATA.sys[0].id; }
+  const dist = bfs(center, J); const ids = Object.keys(dist).map(Number);
+  const pos = miniLayout(center, ids);
+  // fill the panel: stretch x and y independently into pixel space (labels stay crisp, no wasted margins)
+  const W = Math.max(svg.clientWidth, 120), Hh = Math.max(svg.clientHeight, 100), mx = 34, myT = 20, myB = 14;
+  const xs = ids.map(i => pos[i][0]), ys = ids.map(i => pos[i][1]);
+  const ax = Math.min(...xs), bx = Math.max(...xs), ay = Math.min(...ys), by_ = Math.max(...ys);
+  const sx = (W - 2 * mx) / Math.max(bx - ax, 1), sy = (Hh - myT - myB) / Math.max(by_ - ay, 1);
+  const PP = {}; ids.forEach(i => PP[i] = [mx + (pos[i][0] - ax) * sx, myT + (pos[i][1] - ay) * sy]);
+  const P = id => PP[id];
+  svg.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
+  const k = 1;
+  const inSet = new Set(ids);
+  // heat glow: top-10 lowsec by NPC kills (ratting) across the area
+  const IGN = new Set((d.ignoredIds || []));
+  const H = d.heat || {}; const rank = DATA.sys.filter(s => dispSec(s.s) < .5 && !IGN.has(s.id) && H[s.id] && H[s.id][3] > 0).sort((a, b) => H[b.id][3] - H[a.id][3]).slice(0, 10);
+  const defs = el("defs", {}, svg);
+  [["gR", "#ff3b30"], ["gO", "#ff9a2b"]].forEach(([id, c]) => { const g = el("radialGradient", { id }, defs); el("stop", { offset: "0%", "stop-color": c, "stop-opacity": .75 }, g); el("stop", { offset: "100%", "stop-color": c, "stop-opacity": 0 }, g); });
+  rank.forEach((s, i) => { if (inSet.has(s.id)) { const [x, y] = P(s.id); el("circle", { cx: x, cy: y, r: (i < 3 ? 30 : 21), fill: `url(#${i < 3 ? "gR" : "gO"})` }, svg); } });
+  // gates
+  DATA.gates.forEach(([a, b]) => { if (inSet.has(a) && inSet.has(b)) { const [ax, ay] = P(a), [bx, by] = P(b); el("line", { x1: ax, y1: ay, x2: bx, y2: by, stroke: "#5b636d", "stroke-width": 1.2 * k, "stroke-opacity": .9 }, svg); } });
+  // kill pulses (30 min)
+  const by = {}; ST.evs.forEach(e => { if (!inSet.has(e.sys)) return; const m = (Date.now() - Date.parse(e.time)) / 60000; if (m > 30) return; const h = hitEv(e, d); const o = by[e.sys]; if (!o || h > o.h || (h === o.h && m < o.m)) by[e.sys] = { h, m }; });
+  for (const sid in by) { const [x, y] = P(+sid), o = by[sid], op = Math.max(.25, 1 - o.m / 30); el("circle", { cx: x, cy: y, r: (o.h ? 15 : 12) * k, fill: o.h ? "#ff3bd4" : "none", "fill-opacity": o.h ? op * .25 : 0, stroke: o.h ? "#ff3bd4" : "#d0d7de", "stroke-width": (o.h ? 2.5 : 1.5) * k, "stroke-opacity": op }, svg); }
+  // systems
+  const camp = new Set((d.settings.camp || "").split(/[,\n;]+/).map(t => t.trim().toLowerCase()));
+  ids.forEach(id => {
+    const s = S[id], [x, y] = P(id), low = dispSec(s.s) < .5;
+    if (IGN.has(id)) { el("circle", { cx: x, cy: y, r: 5, fill: "#2a2f36", stroke: "#4a535d", "stroke-width": 1 }, svg); const t = el("text", { x, y: y - 8, "text-anchor": "middle", "font-size": 10, fill: "#5b636d" }, svg); t.textContent = s.n; return; }
+    el("circle", { cx: x, cy: y, r: 6, fill: low ? "#c46a22" : "#3a424b", stroke: camp.has(s.n.toLowerCase()) ? "#ff3b30" : low ? "#e0863a" : "#59626c", "stroke-width": (camp.has(s.n.toLowerCase()) ? 2.2 : 1) * k }, svg);
+    const t = el("text", { x, y: y - 9, "text-anchor": "middle", "font-size": id === center ? 13 : 11.5, "font-weight": id === center ? 800 : 600, fill: low ? "#f2c7a0" : "#9aa4ae", "paint-order": "stroke", stroke: "rgba(10,13,17,.9)", "stroke-width": 3 * k }, svg); t.textContent = s.n;
+    const lc = d.localCounts[id]; if (lc && Date.now() / 1000 - lc[1] < 1800) { const tt = el("text", { x: x + 8 * k, y: y + 12 * k, "font-size": 9.5 * k, "font-weight": 800, fill: "#3ddc84" }, svg); tt.textContent = "👥" + lc[0]; }
+    const hh = H[id]; if (hh && hh[3] && low) { const tt = el("text", { x: x - 8 * k, y: y + 12 * k, "text-anchor": "end", "font-size": 9 * k, "font-weight": 700, fill: "#ffb38a" }, svg); tt.textContent = hh[3]; }
+  });
+  // jump range: violet ring on lowsec systems within range of any jump toon
+  const inR = new Set((d.jump || []).flatMap(j => j.inRange || []));
+  ids.forEach(id => { if (inR.has(id)) { const [x, y] = P(id); el("circle", { cx: x, cy: y, r: 9.5, fill: "none", stroke: "#a78bfa", "stroke-width": 1.6, "stroke-dasharray": "3 2" }, svg); } });
+  // you
+  d.chars.filter(c => c.running && c.inMap && inSet.has(c.sys)).forEach(c => { const [x, y] = P(c.sys); el("circle", { cx: x, cy: y, r: 10 * k, fill: "none", stroke: "#3ddc84", "stroke-width": 2.5 * k }, svg); });
+}
+
+async function poll() {
+  try {
+    const r = await fetch(`/state?since=${ST.last}&asince=${Math.max(ST.alast, 0)}`); const d = await r.json();
+    for (const e of d.events) { ST.evs.push(e); ST.last = Math.max(ST.last, e.n); }
+    if (ST.evs.length > 400) ST.evs.splice(0, ST.evs.length - 400);
+    ST.recent = (ST.recent || []).concat(d.alerts).slice(-20); d.recentAlerts = ST.recent;
+    if (ST.alast >= 0 && d.alerts.length && d.settings.sound !== false) {
+      const nm = d.alerts.some(a => a.nearMe), w = d.alerts.some(a => a.watched);
+      play(nm && w ? "both" : nm ? "near" : d.alerts.some(a => a.attacker) ? "watched" : "victim");
+      ST.flashT = Date.now(); $("wrap").classList.add(nm ? "flashN" : "flashW");
+    }
+    if (d.alerts.length) ST.alast = d.alerts[d.alerts.length - 1].n; else if (ST.alast < 0) ST.alast = 0;
+    ST.d = d; render();
+  } catch (e) { $("top").innerHTML = `<span class="mut">radar not responding…</span>`; }
+}
+poll(); setInterval(poll, 700);
+window.addEventListener("resize", render);
+</script>
+</body></html>
