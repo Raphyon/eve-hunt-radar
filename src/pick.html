@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Mark Local area</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:rgba(0,0,0,.38);cursor:crosshair;font:16px "Segoe UI",sans-serif;user-select:none}
+#msg{position:fixed;top:40px;left:50%;transform:translateX(-50%);background:rgba(10,13,17,.92);color:#e6ebf0;padding:12px 18px;border-radius:10px;border:1px solid rgba(255,255,255,.15);text-align:center}
+#msg b{color:#3ddc84}
+#box{position:fixed;border:2px solid #3ddc84;background:rgba(61,220,132,.12);display:none}
+</style></head><body>
+<div id="msg">Drag a box over the <b>names</b> in Local's member list<br><small>Esc to cancel</small></div>
+<div id="box"></div>
+<script>
+const q = new URLSearchParams(location.search), OX = +q.get("ox") || 0, OY = +q.get("oy") || 0;
+const box = document.getElementById("box"); let s = null;
+const post = b => fetch("/cmd", { method: "POST", body: JSON.stringify(b) });
+addEventListener("mousedown", e => { s = [e.clientX, e.clientY]; box.style.display = "block"; mv(e); });
+addEventListener("mousemove", e => { if (s) mv(e); });
+function mv(e) { const x = Math.min(s[0], e.clientX), y = Math.min(s[1], e.clientY); Object.assign(box.style, { left: x + "px", top: y + "px", width: Math.abs(e.clientX - s[0]) + "px", height: Math.abs(e.clientY - s[1]) + "px" }); }
+addEventListener("mouseup", e => {
+  if (!s) return; const x = Math.min(s[0], e.clientX), y = Math.min(s[1], e.clientY), w = Math.abs(e.clientX - s[0]), h = Math.abs(e.clientY - s[1]); s = null;
+  if (w < 20 || h < 20) { box.style.display = "none"; return; }
+  post({ cmd: "picked", rect: { x: x + OX, y: y + OY, w, h } });
+});
+addEventListener("keydown", e => { if (e.key === "Escape") post({ cmd: "pickcancel" }); });
+</script></body></html>
