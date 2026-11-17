@@ -58,7 +58,7 @@ const DEFAULTS = {
   watchJumpsOn: true, watchJumps: 20, watchLyOn: true, watchLy: 16, space: { low: true, null: true, poch: true }, beepGap: 10,
   keyEdit: "Ctrl+Shift+O", keyMode: "Ctrl+Shift+M",
   localArea: null, lookupOn: true,
-  bg: { file: "@default", v: 1, overlay: true, map: false, dim: 0.55, fit: "contain" },   // background image: "@default" = bundled art, else a file copied into the settings folder
+  bg: { file: "@default", v: 1, overlay: true, map: true, dim: 0.55, fit: "contain" },   // background image: "@default" = bundled art, else a file copied into the settings folder
   jumpToons: {},                 // (unused since v9.3, kept for old settings files)
   autostart: false,
   esiClientId: "",               // optional: EVE developer app client ID, only for reading ship type
@@ -68,6 +68,7 @@ function loadJSON(p, d) { try { return JSON.parse(fs.readFileSync(p, "utf8")); }
 let settings = Object.assign({}, DEFAULTS, loadJSON(SETTINGS_FILE, {}));
 settings.overlay = Object.assign({}, DEFAULTS.overlay, settings.overlay || {});
 settings.bg = Object.assign({}, DEFAULTS.bg, settings.bg || {});
+if (!settings.bgMapOn) { settings.bg.map = true; settings.bgMapOn = true; }   // 10.0.4: background on the big map too (10.0.3 saved it off)
 { const old = loadJSON(SETTINGS_FILE, {});          // v10: camp spots + hunting grounds -> one "watched systems" list
   if (old.watched == null && (old.camp || old.hunt)) settings.watched = [...new Set([old.camp, old.hunt].filter(Boolean).join(",").split(/[,\n;]+/).map(t => t.trim()).filter(Boolean))].join(", "); }
 let saveTimer = null;
