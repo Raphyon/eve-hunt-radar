@@ -130,6 +130,8 @@ function render() {
 const LAYOUT = {};
 function miniLayout(center, ids) {
   const key = center + ":" + ids.length; if (LAYOUT[key]) return LAYOUT[key];
+  // CCP's in-game 2D map layout (same as the big map); force layout only as a fallback
+  if (U.p2 && ids.every(id => U.p2[id])) { const p = {}; ids.forEach(id => p[id] = U.p2[id]); return LAYOUT[key] = p; }
   let seed = center % 2147483647 || 1; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;   // same layout every time
   const set = new Set(ids), K = 70, cx = S[center].x, cy = S[center].y;
   const p = {}; ids.forEach(id => { p[id] = [(S[id].x - cx) + (rnd() - .5) * 20, (S[id].y - cy) + (rnd() - .5) * 20]; });
@@ -158,9 +160,13 @@ function drawMini(d, me) {
   // fill the panel: stretch x and y independently into pixel space (labels stay crisp, no wasted margins)
   const W = Math.max(svg.clientWidth, 120), Hh = Math.max(svg.clientHeight, 100), mx = 30, myT = 18, myB = 12;
   // spread: blend each axis half "true layout" and half "rank order", so tight clusters open up and the panel is filled evenly
-  const spread = (vals) => { const n = vals.length, lo = Math.min(...vals), hi = Math.max(...vals), order = vals.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]), rank = new Array(n);
-    order.forEach(([, i], r) => rank[i] = n > 1 ? r / (n - 1) : .5); return vals.map((v, i) => .45 * ((v - lo) / Math.max(hi - lo, 1e-9)) + .55 * rank[i]); };
-  const nx = spread(ids.map(i => pos[i][0])), ny = spread(ids.map(i => pos[i][1]));
+  // in-game 2D layout, with empty stretches longer than one map grid step collapsed (long gates between regions),
+  // then stretched to the panel: local shapes match the in-game map, no big holes
+  const squeeze = (vals, step) => { const u = [...new Set(vals)].sort((a, b) => a - b), m = new Map(); let acc = 0;
+    u.forEach((v, i) => { if (i) acc += Math.min(v - u[i - 1], step); m.set(v, acc); });
+    return vals.map(v => acc ? m.get(v) / acc : .5); };
+  const p2 = U.p2 && ids.every(id => U.p2[id]);
+  const nx = squeeze(ids.map(i => pos[i][0]), p2 ? 68 : 1e9), ny = squeeze(ids.map(i => pos[i][1]), p2 ? 50 : 1e9);
   const PP = {}; ids.forEach((i, k) => PP[i] = [mx + nx[k] * (W - 2 * mx), myT + ny[k] * (Hh - myT - myB)]);
   const P = id => PP[id];
   svg.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
