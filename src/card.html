@@ -84,7 +84,7 @@ function actHtml(a) {
   const head = `<h4><span class="ic">⏱</span>Last ${a.days} days${a.days > 7 ? ` <small>nothing in the last ${a.days === 30 ? 7 : 30}</small>` : ""}</h4>`;
   const sum = `<div class="sum"><span><b>${a.kills}${a.more ? "+" : ""}</b> <span class="mut">kills</span></span><span><b>${a.losses}</b> <span class="mut">losses</span></span></div>`;
   const rows = a.recent.map(r => `<div class="row">${shipImg(r.type)}<div class="rt">
-      <div class="r1"><span class="tag ${r.lost ? "loss" : "kill"}">${r.lost ? "LOSS" : "KILL"}</span>${esc(r.ship)}</div>
+      <div class="r1"><span class="tag ${r.lost ? "loss" : "kill"}">${r.lost ? "LOSS" : "KILL"}</span>${esc(r.ship)}${r.flying ? ` <span class="mut">· flying ${esc(r.flying)}</span>` : ""}</div>
       <div class="r2">${sysLink(r.sys, r.sec)}${r.region ? ` <span class="dim">· ${esc(r.region)}</span>` : ""} · ${ago(r.t)} ago${r.value ? ` · ${isk(r.value)}` : ""}</div>
     </div>${L(r.link, "↗", "go")}</div>`).join("");
   return head + sum + rows;

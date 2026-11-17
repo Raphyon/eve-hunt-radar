@@ -722,8 +722,10 @@ async function recentActivity(cid) {
         const lost = km.victim && km.victim.character_id === cid;
         const me = lost ? km.victim : (km.attackers || []).find(x => x.character_id === cid) || {};
         const [, shipName] = await shipInfo(me.ship_type_id);
+        const vt = km.victim ? km.victim.ship_type_id : null;
+        const [, victimShip] = lost ? [null, shipName] : await shipInfo(vt);
         const s = SYS[km.solar_system_id];
-        rows.push({ t: km.killmail_time, lost, ship: shipName, type: me.ship_type_id || null, sysId: km.solar_system_id, n: (km.attackers || []).length, sys: s ? s.n : String(km.solar_system_id), sec: s ? dispSec(s.s) : null, region: s ? s.r : null,
+        rows.push({ t: km.killmail_time, lost, ship: victimShip, type: vt || null, flying: lost ? null : shipName, sysId: km.solar_system_id, n: (km.attackers || []).length, sys: s ? s.n : String(km.solar_system_id), sec: s ? dispSec(s.s) : null, region: s ? s.r : null,
           link: `https://zkillboard.com/kill/${km.killmail_id}/`, value });
       }
       result = { days, kills: rows.filter(r => !r.lost).length, losses: rows.filter(r => r.lost).length, more: inWin.length >= 30, recent: rows.slice(0, 5) };
