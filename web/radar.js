@@ -191,12 +191,13 @@ function drawPulses() {
 function heatVal(r, m) { return !r ? 0 : m === "j" ? r[0] : m === "k" ? r[1] + r[2] : r[3]; }
 function heatRank() {
   const m = $("heatMode").value; if (m === "off") return { m, rank: {}, list: [] };
-  // lowsec only (0.1-0.4), within 15 jumps of your running characters, so the colours mean something where you are
-  const origins = RA.chars.filter(c => c.running && S[c.sys]).map(c => c.sys), near = {};
-  const q = [...origins]; origins.forEach(o => near[o] = 0);
-  while (q.length) { const u = q.shift(); if (near[u] >= 15) continue; ADJ[u].forEach(v => { if (near[v] === undefined) { near[v] = near[u] + 1; q.push(v); } }); }
-  const list = DATA.sys.filter(s => { const d = dispSec(s.s); return d > 0 && d < 0.5 && !window.IGNORED.has(s.id) && (!origins.length || near[s.id] !== undefined); }).map(s => [s, heatVal(RA.heat[s.id], m)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
-  const rank = {}; list.forEach((x, i) => rank[x[0].id] = i + 1);
+  // inside your watch range (gate jumps from your characters / LY from jump toons, as set under Watch range);
+  // lowsec and nullsec ranked SEPARATELY (null ratting numbers would drown lowsec)
+  const W = RA.watchIds && RA.watchIds.size ? RA.watchIds : null;
+  const band = s => { const d = dispSec(s.s); return d >= 0.5 ? null : d > 0 ? "low" : "null"; };
+  const all = DATA.sys.filter(s => band(s) && !window.IGNORED.has(s.id) && (!W || W.has(s.id))).map(s => [s, heatVal(RA.heat[s.id], m)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+  const rank = {}, list = [], seen = { low: 0, null: 0 };
+  all.forEach(x => { const b = band(x[0]); rank[x[0].id] = ++seen[b]; list.push(x); });
   return { m, rank, list };
 }
 const tierCol = r => r && r <= 3 ? "#ff3b30" : r && r <= 10 ? "#ff9a2b" : "#3a424b";
@@ -221,7 +222,7 @@ function drawHeat() {
   const defs = el("defs", {}, g);
   [["hgR", "#ff3b30"], ["hgO", "#ff9a2b"]].forEach(([id, c]) => { const gr = el("radialGradient", { id }, defs);
     el("stop", { offset: "0%", "stop-color": c, "stop-opacity": .8 }, gr); el("stop", { offset: "50%", "stop-color": c, "stop-opacity": .35 }, gr); el("stop", { offset: "100%", "stop-color": c, "stop-opacity": 0 }, gr); });
-  H.list.slice(0, 10).forEach(([s], i) => el("circle", { cx: s.px, cy: s.py, r: i < 3 ? 85 : 60, fill: i < 3 ? "url(#hgR)" : "url(#hgO)" }, g));
+  H.list.filter(([s]) => H.rank[s.id] <= 10).forEach(([s]) => { const top = H.rank[s.id] <= 3; el("circle", { cx: s.px, cy: s.py, r: top ? 85 : 60, fill: top ? "url(#hgR)" : "url(#hgO)" }, g); });
 }
 $("heatMode").onchange = () => { drawHeat(); drawNodes(); };
 
@@ -317,7 +318,7 @@ async function poll() {
     if (RA.evs.length > 600) RA.evs.splice(0, RA.evs.length - 600);
     $("wCnt").textContent = `${d.watchCount} systems currently watched` + (d.watchCount ? "" : " — log in and jump once so the radar knows where you are");
     RA.ws = { g: new Set((d.watch || {}).g || []), t: new Set((d.watch || {}).t || []) };
-    applyUi(d); renderApp(d); renderJump(d); RA.jump = d.jump || []; RA.jumpReach = d.jumpReach || []; RA.si = d.sysInfo || {}; window.IGNORED = new Set(d.ignoredIds || []);
+    applyUi(d); renderApp(d); renderJump(d); RA.jump = d.jump || []; RA.jumpReach = d.jumpReach || []; RA.si = d.sysInfo || {}; RA.watchIds = new Set(d.watchIds || []); window.IGNORED = new Set(d.ignoredIds || []);
     renderFeed(); renderChars(); renderLocal(); renderBest(); drawPulses(); drawHeat();
     // nodes are 5k+ elements: only rebuild when what they show changed (Local counts, ignore list)
     const sig = JSON.stringify([RA.lc, [...window.IGNORED].sort(), Math.floor(Date.now() / 300000), RA.chars.filter(c => c.running).map(c => c.sys), RA.hr && RA.hr.list.slice(0, 40).map(x => x[0].id)]);
