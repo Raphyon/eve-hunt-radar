@@ -50,7 +50,8 @@ function bfs(src, maxd = 99) {
 const DEFAULTS = {
   watched: "Gonditsa, Ami, Fensi, Vecamia, Ahbazon, Beke, Armi, Kihkounad", ignore: "",
   camp: null, hunt: null,          // pre-v10, merged into "watched" on load
-  classes: { BS: true, MAR: true, BLOPS: true, T3C: true, CAP: true, BC: true, CMD: true, ICS: true, EXH: true },
+  classes: null,                 // pre-v10 fixed ship classes, migrated into watchlists on load
+  watchlists: null,              // [{ name, on, groups: [groupID], types: [typeID] }]
   victim: true, range: 3, sound: true, near: true, nearRange: 5, chatlogs: "",
   // v10: watch range (kills outside are dropped before any lookup) and space bands
   watchJumpsOn: true, watchJumps: 20, watchLyOn: true, watchLy: 16, space: { low: true, null: true, poch: true }, beepGap: 10,
@@ -111,7 +112,20 @@ async function shipInfo(tid) {
   TYPES[tid] = (c === 200 && b) ? [b.group_id || 0, b.name || `type ${tid}`] : [0, `type ${tid}`];
   return TYPES[tid];
 }
-const watchedClass = g => { const c = GROUP_CLASS[g]; return c && settings.classes[c] !== false ? c : null; };
+// ---- ship watchlists: a ship is watched if its type, or its whole group, is in any enabled list
+if (!Array.isArray(settings.watchlists)) {
+  const cls = settings.classes || {};
+  settings.watchlists = [{ name: "Default", on: true, types: [],
+    groups: Object.keys(GROUP_CLASS).filter(g => cls[GROUP_CLASS[g]] !== false).map(Number) }];
+}
+let wsCache = { key: null, g: new Set(), t: new Set() };
+function watchSets() {
+  const key = JSON.stringify(settings.watchlists); if (key === wsCache.key) return wsCache;
+  const g = new Set(), t = new Set();
+  (settings.watchlists || []).filter(l => l.on !== false).forEach(l => { (l.groups || []).forEach(x => g.add(+x)); (l.types || []).forEach(x => t.add(+x)); });
+  return wsCache = { key, g, t };
+}
+const isWatched = p => { const W = watchSets(); return !!p && (W.t.has(+p.ship || +p.type) || W.g.has(+p.group)); };
 
 // ------------------------------------------------------------- targets / alerts
 function parseTargets(txt) {
@@ -157,8 +171,8 @@ function maybeAlert(ev) {
   //             everything else in watch range: silent (feed + map)
   if (!status.live) return;
   if (ignored().has(ev.sys)) return;
-  const a = ev.attackers.filter(p => watchedClass(p.group));
-  const v = watchedClass(ev.victim.group) && settings.victim;
+  const a = ev.attackers.filter(isWatched);
+  const v = isWatched(ev.victim) && settings.victim;
   const watched = !!(a.length || v);
   const me = activeChar(), mySys = me && chars.get(me).sys;
   const R = +settings.nearRange || 5;
@@ -193,7 +207,7 @@ async function handle(pkg) {
   events.push(ev); if (events.length > 600) events.shift();
   for (const [role, p] of [["victim", ev.victim], ...ev.attackers.map(p => ["attacker", p])]) {
     if (!p.char) continue; const l = seen.get(p.char) || [];
-    l.unshift({ t: ev.time, sys: sid, ship: p.shipName, group: p.group, role }); seen.set(p.char, l.slice(0, 5));
+    l.unshift({ t: ev.time, sys: sid, ship: p.shipName, type: p.ship, group: p.group, role }); seen.set(p.char, l.slice(0, 5));
   }
   status.kept++;
   log(`KILL ${SYS[sid].n}: ${ev.victim.shipName} (${ev.victim.charName}) by ${atk.length}`);
@@ -234,7 +248,7 @@ function bestNearby(maxj = 6, n = 8) {
   if (!origins.length) return [];
   const dist = new Map(); origins.forEach(o => bfs(o, maxj).forEach((v, k) => dist.set(k, Math.min(dist.get(k) ?? 99, v))));
   const recent = {}; const t0 = now();
-  events.forEach(e => { const t = Date.parse(e.time) / 1000; if (t0 - t < 3600 && (e.attackers.some(p => GROUP_CLASS[p.group]) || GROUP_CLASS[e.victim.group])) recent[e.sys] = (recent[e.sys] || 0) + 1; });
+  events.forEach(e => { const t = Date.parse(e.time) / 1000; if (t0 - t < 3600 && (e.attackers.some(isWatched) || isWatched(e.victim))) recent[e.sys] = (recent[e.sys] || 0) + 1; });
   const rows = [];
   const IG = ignored();
   dist.forEach((d, sid) => {
@@ -388,7 +402,7 @@ async function statsLoop() {
   }
 }
 function localView() {
-  const ps = local.pilots.map(p => Object.assign({}, p, { st: zstats.get(p.id) || null, hot: (p.seen || []).some(s => GROUP_CLASS[s.group] && s.role === "attacker") }));
+  const ps = local.pilots.map(p => Object.assign({}, p, { st: zstats.get(p.id) || null, hot: (p.seen || []).some(s => isWatched(s) && s.role === "attacker") }));
   ps.sort((a, b) => (b.hot - a.hot) || (((b.st || {}).danger ?? -1) - ((a.st || {}).danger ?? -1)) || a.name.localeCompare(b.name));
   const g = {}; ps.filter(p => p.id && !p.me).forEach(p => { const k = p.alli || p.corp || "?"; g[k] = (g[k] || 0) + 1; });
   return { sys: local.sys, sysName: SYS[local.sys] ? SYS[local.sys].n : null, t: local.t, count: local.count, resolving: local.resolving, source: local.source, pilots: ps, groups: Object.entries(g).sort((a, b) => b[1] - a[1]).slice(0, 6) };
@@ -658,7 +672,7 @@ async function lookupPilot(name, at, seq = ++card.seq, readAs = null) {
     solo: zz.soloKills ?? null, isk: zz.iskDestroyed ?? null, active: zz.activepvp && zz.activepvp.kills ? zz.activepvp.kills.count ?? null : null,
     ships: pickTop(listBy(/ship/i)), systems: pickTop(listBy(/system/i)) };
   zstats.set(ch.id, { danger: st.danger, gang: st.gang, kills: st.kills, losses: st.losses });
-  const sn = (seen.get(ch.id) || []).slice(0, 3).map(x => ({ role: x.role, ship: x.ship, sys: SYS[x.sys] ? SYS[x.sys].n : x.sys, t: x.t, watched: !!GROUP_CLASS[x.group] }));
+  const sn = (seen.get(ch.id) || []).slice(0, 3).map(x => ({ role: x.role, ship: x.ship, sys: SYS[x.sys] ? SYS[x.sys].n : x.sys, t: x.t, watched: isWatched(x) }));
   showCard({ state: "ok", at, readAs, id: ch.id, name: ch.name, corp: names.get(a.corporation_id), alli: names.get(a.alliance_id), st, seen: sn, zk: c3 === 200,
     link: `https://zkillboard.com/character/${ch.id}/` });
 }
@@ -828,7 +842,7 @@ function statePayload(q) {
   return {
     version: VERSION, status, heat, heatAt, events: events.filter(e => e.n > since), alerts: alerts.filter(a => a.n > asince),
     chars: charView(), local: localView(), best: bestNearby(), localCounts, settings, chatlogs: chatlog,
-    jump: jumpView().map(j => Object.assign({}, j, { inRange: undefined, inRangeCount: j.inRange.length })), jumpToons: jumpToonsView(), jumpClasses: JUMP, ignoredIds: [...ignored()],
+    jump: jumpView().map(j => Object.assign({}, j, { inRange: undefined, inRangeCount: j.inRange.length })), jumpToons: jumpToonsView(), jumpClasses: JUMP, ignoredIds: [...ignored()], watch: { g: [...watchSets().g], t: [...watchSets().t] },
     jumpReach: [...new Set(jumpView().flatMap(j => j.inRange))], watchCount: watchSet().size, sysInfo: sysInfo(),
     ui: { edit: editMode, mode: settings.overlay.mode, keys: keyStatus }, snap, now: now(), update: upd, dataDir: DATA_DIR,
   };
@@ -839,7 +853,7 @@ function startServer() {
     const u = new URL(req.url, "http://x");
     const send = (code, body, type) => { res.writeHead(code, { "Content-Type": type, "Cache-Control": "no-store" }); res.end(body); };
     if (req.method === "GET") {
-      if (u.pathname === "/") return send(200, read("map.html").replace("__VERSION__", VERSION).replace("__DATA__", JSON.stringify(MAP)).replace("__SHIPS__", JSON.stringify(SHIPS.groupClass)), "text/html; charset=utf-8");
+      if (u.pathname === "/") return send(200, read("map.html").replace("__VERSION__", VERSION).replace("__DATA__", () => JSON.stringify(MAP)).replace("__SHIPS__", () => JSON.stringify({ types: SHIPS.types, groups: SHIPS.groups })), "text/html; charset=utf-8");
       if (u.pathname === "/overlay") return send(200, read("overlay.html").replace("__DATA__", () => JSON.stringify(U)).replace("__SHIPS__", JSON.stringify(SHIPS.groupClass)), "text/html; charset=utf-8");
       if (u.pathname === "/pick") return send(200, read("pick.html"), "text/html; charset=utf-8");
       if (u.pathname === "/card") return send(200, read("card.html"), "text/html; charset=utf-8");
