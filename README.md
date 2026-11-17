@@ -1,7 +1,7 @@
 # Hunt Radar
 
 Hunting overlay for EVE Online — all of known space (lowsec, nullsec, Pochven), never highsec or wormholes.
-A translucent, click-through strip or mini-map on top of EVE with live PvP kills, ratting activity,
+A translucent, click-through mini-map on top of EVE with live PvP kills, ratting activity,
 Local intel, pilot lookups and jump range for blops/capitals.
 
 ## Install
@@ -22,11 +22,11 @@ EVE must run windowed or in *Fixed window* mode — overlays can't draw over exc
 
 | | |
 |---|---|
-| **Strip** | your character · system · 👥 Local count (⚠ known killers) · ◉ near-me alerts · newest alert or best nearby · jump range |
-| **Mini-map** | systems around you on the in-game 2D map layout: ratting glow, kill rings (magenta = watched ship), 👥 Local, ⤳ jump range |
+| **Mini-map** | your character · system · 👥 Local count · ◉ near-me alerts, then the systems around you on the in-game 2D map layout (ratting glow, kill rings, 👥 Local), "⤳ In range:" jump toons that can reach you, latest alerts |
 | **Map & settings** | all of New Eden on the in-game 2D map layout (nullsec dark red, lowsec orange, highsec dimmed), kill feed, all settings |
 | `Ctrl+Shift+O` | unlock the overlay to move/resize/click it (again to lock) |
-| `Ctrl+Shift+M` | strip ↔ mini-map |
+| `Ctrl+Shift+M` | show / hide the mini-map |
+| `Ctrl+Shift+B` | open / close the big map |
 | Tray icon | map & settings, edit overlay, mark Local area, updates, quit |
 
 **Watch range** — kills are kept within 20 gate jumps of any of your characters, or 16 LY of a jump toon.

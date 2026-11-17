@@ -117,7 +117,7 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
    <label class="chk"><input type="checkbox" id="autoSt"> Start Hunt Radar with Windows</label>
    <div class="row"><button id="impOld">Import settings from old zip version</button><button id="openData">Open settings folder</button></div>
    <h2>Overlay &amp; hotkeys</h2>
-   <div class="row"><button id="ovEdit">Edit / move overlay</button><button id="ovMode">Strip ↔ Mini-map</button><button id="ovTest">Test sounds</button></div>
+   <div class="row"><button id="ovEdit">Edit / move overlay</button><button id="ovMode">Show / hide mini-map</button><button id="ovTest">Test sounds</button></div>
    <label>Overlay opacity <span id="opV" class="sub"></span></label><input id="ovOp" type="range" min="0.4" max="1" step="0.02" style="width:100%">
    <label>Background image</label>
    <div class="row"><button id="bgPick">Choose image…</button><button id="bgDef">Default</button><button id="bgClear">Remove</button>
@@ -129,7 +129,8 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
    <label class="chk"><input type="checkbox" id="sndOn" checked> Alert sounds</label>
    <table class="keys">
     <tr><td>Edit / lock overlay</td><td><input id="kEdit" type="text"></td><td id="kEditS" class="sub"></td></tr>
-    <tr><td>Strip ↔ mini-map</td><td><input id="kMode" type="text"></td><td id="kModeS" class="sub"></td></tr>
+    <tr><td>Show / hide mini-map</td><td><input id="kMode" type="text"></td><td id="kModeS" class="sub"></td></tr>
+    <tr><td>Open / close big map</td><td><input id="kMap" type="text"></td><td id="kMapS" class="sub"></td></tr>
    </table>
    <div class="sub">Click a box and press the keys you want. Saved automatically.</div>
    <h2>Jump drive toons (ESI)</h2>
@@ -708,7 +709,7 @@ function accel(e) {
     || (/^F\d+$/.test(e.key) ? e.key : null) || (e.key.length === 1 ? e.key.toUpperCase() : null);
   return k ? [...mods, k].join("+") : null;
 }
-[["kEdit", "keyEdit"], ["kMode", "keyMode"]].forEach(([id, key]) => {
+[["kEdit", "keyEdit"], ["kMode", "keyMode"], ["kMap", "keyMap"]].forEach(([id, key]) => {
   const inp = $(id); inp.readOnly = true;
   inp.addEventListener("keydown", e => { e.preventDefault(); const a = accel(e); if (!a) return; inp.value = a; post("/settings", { [key]: a }); });
 });
@@ -741,7 +742,7 @@ let uiLoaded = false;
 function applyUi(d) {
   RA.ui = d.ui; const st = d.settings; applyBg(st);
   $("ovEdit").textContent = d.ui.edit ? "Lock overlay 🔒" : "Edit / move overlay";
-  const ks = d.ui.keys || {}; $("kEditS").textContent = ks.edit === "ok" ? "✓" : ks.edit || ""; $("kModeS").textContent = ks.mode === "ok" ? "✓" : ks.mode || "";
+  const ks = d.ui.keys || {}; $("kEditS").textContent = ks.edit === "ok" ? "✓" : ks.edit || ""; $("kModeS").textContent = ks.mode === "ok" ? "✓" : ks.mode || ""; $("kMapS").textContent = ks.map === "ok" ? "✓" : ks.map || "";
   const hp = d.helper; $("hlpErr").style.display = hp && hp.ok === false ? "block" : "none";
   if (hp && hp.ok === false) $("hlpErr").textContent = "⚠ Windows helper failed, so active character, window titles and middle-click lookup are off. Send this to Amund: " + hp.err;
   const sn = d.snap; $("snMsg").textContent = sn.msg ? sn.msg + " · " + agoS(sn.t) + " ago" : (st.localArea ? "Local area set." : "No Local area marked yet.");
@@ -749,7 +750,7 @@ function applyUi(d) {
   $("ovOp").value = st.overlay.opacity; $("opV").textContent = Math.round(st.overlay.opacity * 100) + "%"; $("ovJ").value = String(st.overlay.mapJumps || 4);
   $("sndOn").checked = st.sound !== false; $("luOn").checked = st.lookupOn !== false;
   $("esiCid").value = st.esiClientId || ""; $("autoSt").checked = !!st.autostart;
-  $("kEdit").value = st.keyEdit || ""; $("kMode").value = st.keyMode || "";
+  $("kEdit").value = st.keyEdit || ""; $("kMode").value = st.keyMode || ""; $("kMap").value = st.keyMap || "";
 }
 
 async function poll() {

@@ -263,7 +263,7 @@ function accel(e) {
     || (/^F\d+$/.test(e.key) ? e.key : null) || (e.key.length === 1 ? e.key.toUpperCase() : null);
   return k ? [...mods, k].join("+") : null;
 }
-[["kEdit", "keyEdit"], ["kMode", "keyMode"]].forEach(([id, key]) => {
+[["kEdit", "keyEdit"], ["kMode", "keyMode"], ["kMap", "keyMap"]].forEach(([id, key]) => {
   const inp = $(id); inp.readOnly = true;
   inp.addEventListener("keydown", e => { e.preventDefault(); const a = accel(e); if (!a) return; inp.value = a; post("/settings", { [key]: a }); });
 });
@@ -296,7 +296,7 @@ let uiLoaded = false;
 function applyUi(d) {
   RA.ui = d.ui; const st = d.settings; applyBg(st);
   $("ovEdit").textContent = d.ui.edit ? "Lock overlay 🔒" : "Edit / move overlay";
-  const ks = d.ui.keys || {}; $("kEditS").textContent = ks.edit === "ok" ? "✓" : ks.edit || ""; $("kModeS").textContent = ks.mode === "ok" ? "✓" : ks.mode || "";
+  const ks = d.ui.keys || {}; $("kEditS").textContent = ks.edit === "ok" ? "✓" : ks.edit || ""; $("kModeS").textContent = ks.mode === "ok" ? "✓" : ks.mode || ""; $("kMapS").textContent = ks.map === "ok" ? "✓" : ks.map || "";
   const hp = d.helper; $("hlpErr").style.display = hp && hp.ok === false ? "block" : "none";
   if (hp && hp.ok === false) $("hlpErr").textContent = "⚠ Windows helper failed, so active character, window titles and middle-click lookup are off. Send this to Amund: " + hp.err;
   const sn = d.snap; $("snMsg").textContent = sn.msg ? sn.msg + " · " + agoS(sn.t) + " ago" : (st.localArea ? "Local area set." : "No Local area marked yet.");
@@ -304,7 +304,7 @@ function applyUi(d) {
   $("ovOp").value = st.overlay.opacity; $("opV").textContent = Math.round(st.overlay.opacity * 100) + "%"; $("ovJ").value = String(st.overlay.mapJumps || 4);
   $("sndOn").checked = st.sound !== false; $("luOn").checked = st.lookupOn !== false;
   $("esiCid").value = st.esiClientId || ""; $("autoSt").checked = !!st.autostart;
-  $("kEdit").value = st.keyEdit || ""; $("kMode").value = st.keyMode || "";
+  $("kEdit").value = st.keyEdit || ""; $("kMode").value = st.keyMode || ""; $("kMap").value = st.keyMap || "";
 }
 
 async function poll() {
