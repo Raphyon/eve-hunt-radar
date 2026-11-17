@@ -111,8 +111,9 @@ function Read-Rect($x, $y, $w, $h, $out) {
   $res = Await ((Get-Ocr).RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
   $stream.Dispose()
   ,@($res.Lines | ForEach-Object {
-    $ys = @($_.Words | ForEach-Object { $_.BoundingRect.Y + $_.BoundingRect.Height / 2 })
-    @{ t = $_.Text; y = [math]::Round((($ys | Measure-Object -Average).Average) / $S, 1) }
+    $tops = @($_.Words | ForEach-Object { $_.BoundingRect.Y }); $bots = @($_.Words | ForEach-Object { $_.BoundingRect.Y + $_.BoundingRect.Height })
+    $t0 = ($tops | Measure-Object -Minimum).Minimum; $b0 = ($bots | Measure-Object -Maximum).Maximum
+    @{ t = $_.Text; y = [math]::Round((($t0 + $b0) / 2) / $S, 1); h = [math]::Round(($b0 - $t0) / $S, 1) }
   })
 }
 function Out-Json($o) { [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress -Depth 4)); [Console]::Out.Flush() }
