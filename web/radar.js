@@ -126,18 +126,27 @@ const who = p => `<b>${esc(p.shipName)}</b> ${esc(p.charName)}${p.alliName ? ` <
 const agoS = t => { const s = Math.round(Date.now() / 1000 - t); return s < 90 ? s + "s" : s < 5400 ? Math.round(s / 60) + "m" : Math.round(s / 3600) + "h"; };
 const jumpTo = root => root.querySelectorAll("[data-id]").forEach(a => a.onclick = ev => { ev.preventDefault(); if (S[+a.dataset.id]) select(+a.dataset.id, true); });
 
-function renderFeed() {
-  const only = $("fOnly").checked;
-  const list = RA.evs.slice().reverse().filter(e => !only || interest(e).hit).slice(0, 80);
-  $("fCount").textContent = `(${RA.evs.length})`;
-  $("feed").innerHTML = list.map(e => {
-    const I = interest(e), [d, tn] = nearestTarget(e.sys), t = new Date(Date.parse(e.time));
-    const hdr = `<div class="fh"><span>${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span> <a href="#" data-id="${e.sys}" class="fs">${esc(e.sysName || (S[e.sys] || {}).n)}</a> <span class="sub">${(e.sec ?? 0).toFixed(1)}${e.region ? " · " + esc(e.region) : ""}${d === null ? "" : " · " + (d === 0 ? "target" : d + "j from " + esc(tn))}</span><span class="fv">${isk(e.val)}</span></div>`;
-    const atk = I.a.length ? I.a.map(who).join("<br>") + (e.attackers.length > I.a.length ? `<br><span class="sub">+${e.attackers.length - I.a.length} other attacker(s)</span>` : "") : `<span class="sub">${e.attackers.length} attacker(s): ${e.attackers.slice(0, 3).map(p => esc(p.shipName)).join(", ")}${e.attackers.length > 3 ? "…" : ""}</span>`;
-    return `<div class="fi ${I.hit ? "hit" : ""}">${hdr}<div><span class="sub">killed</span> ${who(e.victim)}</div><div><span class="sub">by</span> ${atk}</div><a class="zk" href="${e.link}" target="_blank" rel="noopener">zKill ↗</a></div>`;
-  }).join("") || `<div class="sub">No PvP kills in lowsec yet.</div>`;
-  jumpTo($("feed"));
+// kills in one system, shown in a popup on the map when you click it (the long feed list is gone)
+function killRow(e) {
+  const I = interest(e), t = new Date(Date.parse(e.time)), m = Math.round(ageMin(e));
+  const hdr = `<div class="fh"><span>${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span> <span class="sub">${m < 90 ? m + "m" : Math.round(m / 60) + "h"} ago</span><span class="fv">${isk(e.val)}</span></div>`;
+  const atk = I.a.length ? I.a.map(who).join("<br>") + (e.attackers.length > I.a.length ? `<br><span class="sub">+${e.attackers.length - I.a.length} other attacker(s)</span>` : "")
+    : `<span class="sub">${e.attackers.length} attacker(s): ${e.attackers.slice(0, 3).map(p => esc(p.shipName)).join(", ")}${e.attackers.length > 3 ? "…" : ""}</span>`;
+  return `<div class="fi ${I.hit ? "hit" : ""}">${hdr}<div><span class="sub">killed</span> ${who(e.victim)}</div><div><span class="sub">by</span> ${atk}</div><a class="zk" href="${e.link}" target="_blank" rel="noopener">zKill ↗</a></div>`;
 }
+let popSys = null;
+window.showSysKills = id => {
+  const list = RA.evs.filter(e => e.sys === id).slice().reverse();
+  if (!list.length) { popSys = null; $("sysPop").classList.remove("on"); return; }
+  popSys = id; const s = S[id];
+  $("sysPop").innerHTML = `<div class="lh"><span><b>${esc(s.n)}</b> <span class="sub">${dispSec(s.s).toFixed(1)} · ${esc(s.r)} · ${list.length} kill${list.length > 1 ? "s" : ""}</span></span><span id="popX" title="Close (Esc)">✕</span></div>` + list.slice(0, 20).map(killRow).join("");
+  $("popX").onclick = () => { popSys = null; $("sysPop").classList.remove("on"); };
+  $("sysPop").classList.add("on");
+};
+document.addEventListener("keydown", e => { if (e.key === "Escape" && popSys) { popSys = null; $("sysPop").classList.remove("on"); } });
+$("sysPop").addEventListener("pointerdown", e => e.stopPropagation());
+$("sysPop").addEventListener("wheel", e => e.stopPropagation());
+function renderFeed() { if (popSys) showSysKills(popSys); }      // keep an open popup up to date
 function renderChars() {
   const cs = RA.chars.filter(c => c.running);
   $("chars").innerHTML = cs.length ? cs.map(c => `<div class="crow"><span style="color:#3ddc84">${c.active ? "▶" : "&nbsp;&nbsp;"}</span> <b>${esc(c.name)}</b> ${c.sysName ? (S[c.sys] ? `<a href="#" data-id="${c.sys}" class="fs">${esc(c.sysName)}</a>` : esc(c.sysName)) + ` <span class="sub">${c.sec != null ? c.sec.toFixed(1) : ""}</span>` : `<span class="sub">system unknown until you jump</span>`}</div>`).join("")
@@ -214,7 +223,7 @@ function drawHeat() {
     el("stop", { offset: "0%", "stop-color": c, "stop-opacity": .8 }, gr); el("stop", { offset: "50%", "stop-color": c, "stop-opacity": .35 }, gr); el("stop", { offset: "100%", "stop-color": c, "stop-opacity": 0 }, gr); });
   H.list.slice(0, 10).forEach(([s], i) => el("circle", { cx: s.px, cy: s.py, r: i < 3 ? 85 : 60, fill: i < 3 ? "url(#hgR)" : "url(#hgO)" }, g));
 }
-$("heatMode").onchange = () => { drawHeat(); drawNodes(); }; $("fOnly").onchange = renderFeed;
+$("heatMode").onchange = () => { drawHeat(); drawNodes(); };
 
 // ---- overlay & hotkey controls
 const post = (u, b) => fetch(u, { method: "POST", body: JSON.stringify(b) });
