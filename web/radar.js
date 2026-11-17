@@ -182,7 +182,11 @@ function drawPulses() {
 function heatVal(r, m) { return !r ? 0 : m === "j" ? r[0] : m === "k" ? r[1] + r[2] : r[3]; }
 function heatRank() {
   const m = $("heatMode").value; if (m === "off") return { m, rank: {}, list: [] };
-  const list = DATA.sys.filter(s => dispSec(s.s) < 0.5 && !window.IGNORED.has(s.id)).map(s => [s, heatVal(RA.heat[s.id], m)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+  // lowsec only (0.1-0.4), within 15 jumps of your running characters, so the colours mean something where you are
+  const origins = RA.chars.filter(c => c.running && S[c.sys]).map(c => c.sys), near = {};
+  const q = [...origins]; origins.forEach(o => near[o] = 0);
+  while (q.length) { const u = q.shift(); if (near[u] >= 15) continue; ADJ[u].forEach(v => { if (near[v] === undefined) { near[v] = near[u] + 1; q.push(v); } }); }
+  const list = DATA.sys.filter(s => { const d = dispSec(s.s); return d > 0 && d < 0.5 && !window.IGNORED.has(s.id) && (!origins.length || near[s.id] !== undefined); }).map(s => [s, heatVal(RA.heat[s.id], m)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
   const rank = {}; list.forEach((x, i) => rank[x[0].id] = i + 1);
   return { m, rank, list };
 }
@@ -203,9 +207,7 @@ window.radarNode = (s, grp, w, h) => {
 function drawHeat() {
   RA.hr = heatRank();
   const g = $("gHeat"); g.innerHTML = "";
-  const H = RA.hr, lbl = { j: "jumps", k: "ship+pod kills", n: "NPC kills" }[H.m];
-  $("busy").innerHTML = H.m === "off" ? "" : H.list.slice(0, 10).map(([s, v], i) => `<tr class="cl" data-id="${s.id}"><td><span class="rk" style="background:${tierCol(i + 1)}">${i + 1}</span> <b>${esc(s.n)}</b> <span class="sub">${dispSec(s.s).toFixed(1)}</span></td><td class="n">${v} ${lbl}</td></tr>`).join("") || `<tr><td class="sub">No ${lbl} in lowsec this hour.</td></tr>`;
-  $("busy").querySelectorAll("tr.cl").forEach(tr => tr.onclick = () => select(+tr.dataset.id, true));
+  const H = RA.hr;
   if (H.m === "off") return;
   const defs = el("defs", {}, g);
   [["hgR", "#ff3b30"], ["hgO", "#ff9a2b"]].forEach(([id, c]) => { const gr = el("radialGradient", { id }, defs);
@@ -292,7 +294,7 @@ async function poll() {
     applyUi(d); renderApp(d); renderJump(d); RA.jump = d.jump || []; RA.jumpReach = d.jumpReach || []; RA.si = d.sysInfo || {}; window.IGNORED = new Set(d.ignoredIds || []);
     renderFeed(); renderChars(); renderLocal(); renderBest(); drawPulses(); drawHeat();
     // nodes are 5k+ elements: only rebuild when what they show changed (Local counts, ignore list)
-    const sig = JSON.stringify([RA.lc, [...window.IGNORED].sort(), Math.floor(Date.now() / 300000)]);
+    const sig = JSON.stringify([RA.lc, [...window.IGNORED].sort(), Math.floor(Date.now() / 300000), RA.chars.filter(c => c.running).map(c => c.sys), RA.hr && RA.hr.list.slice(0, 40).map(x => x[0].id)]);
     if (sig !== RA.nodeSig) { RA.nodeSig = sig; drawNodes(); }
     // first load: start zoomed on the character you're flying
     if (!RA.centered) { const c = RA.chars.find(c => c.active && S[c.sys]) || RA.chars.find(c => c.running && S[c.sys]); if (c) { RA.centered = true; centerOn(S[c.sys], .8); } }

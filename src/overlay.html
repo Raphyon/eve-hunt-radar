@@ -174,7 +174,7 @@ function drawMini(d, me) {
   const inSet = new Set(ids);
   // heat glow: top-10 lowsec by NPC kills (ratting) across the area
   const IGN = new Set((d.ignoredIds || []));
-  const H = d.heat || {}; const rank = DATA.sys.filter(s => dispSec(s.s) < .5 && !IGN.has(s.id) && H[s.id] && H[s.id][3] > 0).sort((a, b) => H[b.id][3] - H[a.id][3]).slice(0, 10);
+  const H = d.heat || {}; const rank = ids.map(i => S[i]).filter(s => dispSec(s.s) > 0 && dispSec(s.s) < .5 && !IGN.has(s.id) && H[s.id] && H[s.id][3] > 0).sort((a, b) => H[b.id][3] - H[a.id][3]).slice(0, 10);
   const defs = el("defs", {}, svg);
   [["gR", "#ff3b30"], ["gO", "#ff9a2b"]].forEach(([id, c]) => { const g = el("radialGradient", { id }, defs); el("stop", { offset: "0%", "stop-color": c, "stop-opacity": .75 }, g); el("stop", { offset: "100%", "stop-color": c, "stop-opacity": 0 }, g); });
   rank.forEach((s, i) => { if (inSet.has(s.id)) { const [x, y] = P(s.id); el("circle", { cx: x, cy: y, r: (i < 3 ? 30 : 21), fill: `url(#${i < 3 ? "gR" : "gO"})` }, svg); } });
