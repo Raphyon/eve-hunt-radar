@@ -30,58 +30,75 @@ const GROUPS = Object.entries(SHIPDB.groups).map(([id, n]) => ({ id: +id, n, typ
 let wlSel = 0, wlOpenG = new Set(), wlQ = "";
 function wlSummary() {
   const on = WL.filter(l => l.on !== false);
-  $("wlSum").textContent = on.length ? on.map(l => `${l.name} (${(l.groups || []).length} classes, ${(l.types || []).length} ships)`).join(" · ") : "No watchlist enabled — nothing is watched.";
+  const n = l => ["groups", "types", "pgroups", "ptypes"].map(k => (l[k] || []).length);
+  $("wlSum").textContent = on.length ? on.map(l => { const [g, t, pg, pt] = n(l); return `${l.name}: ✗ ${pg + pt} pinged, ✓ ${g + t} watched`; }).join(" · ") : "No watchlist enabled — nothing is watched.";
 }
 function wlSave() {
   fetch("/settings", { method: "POST", body: JSON.stringify({ watchlists: WL }) }).catch(() => {});
-  const g = new Set(), t = new Set(); WL.filter(l => l.on !== false).forEach(l => { (l.groups || []).forEach(x => g.add(+x)); (l.types || []).forEach(x => t.add(+x)); });
+  const g = new Set(), t = new Set(); WL.filter(l => l.on !== false).forEach(l => { ["groups", "pgroups"].forEach(k => (l[k] || []).forEach(x => g.add(+x))); ["types", "ptypes"].forEach(k => (l[k] || []).forEach(x => t.add(+x))); });
   RA.ws = { g, t }; wlSummary(); renderFeed(); drawPulses();
 }
 document.body.insertAdjacentHTML("beforeend", `<div id="wlPop"><div id="wlBox">
-  <div class="wlh"><b>Ship watchlists</b><span class="sub">Kills with these ships beep and show in the feed. Tick a whole class, or open it and pick single ships.</span><span id="wlX" title="Close">✕</span></div>
+  <div class="wlh"><b>Ship watchlists</b><span class="sub">Click a box: <span class="tri s1">✓</span> watched (feed &amp; map) → <span class="tri s2">✗</span> pinged (beeps) → off. Set a whole class, or open it for single ships.</span><span id="wlX" title="Close">✕</span></div>
   <div class="wlb"><div id="wlLists"></div>
-    <div id="wlRight"><input id="wlQ" type="text" placeholder="Search ships or classes…"><div id="wlTree"></div></div></div></div></div>`);
+    <div id="wlRight"><input id="wlQ" type="text" placeholder="Search ships or classes…"><div id="wlTree"></div></div></div>
+  <div id="wlAsk"><div class="ab"><div id="wlAskMsg"></div><div class="row" style="justify-content:flex-end"><button id="wlNo">Cancel</button><button id="wlYes" class="danger">OK</button></div></div></div></div></div>`);
 function wlRender() {
-  if (!WL.length) WL.push({ name: "My list", on: true, groups: [], types: [] });
+  if (!WL.length) WL.push({ name: "My list", on: true, groups: [], types: [], pgroups: [], ptypes: [] });
   if (wlSel >= WL.length) wlSel = 0;
   $("wlLists").innerHTML = WL.map((l, i) => `<div class="wli ${i === wlSel ? "sel" : ""}" data-i="${i}"><input type="checkbox" data-on="${i}" ${l.on !== false ? "checked" : ""} title="Enabled">
-      <input type="text" class="wln" data-n="${i}" value="${esc(l.name)}"><span class="sub">${(l.groups || []).length}c ${(l.types || []).length}s</span>${WL.length > 1 ? `<span class="wld" data-d="${i}" title="Delete list">✕</span>` : ""}</div>`).join("")
-    + `<button id="wlNew">+ New list</button>`;
-  const L = WL[wlSel], G = new Set((L.groups || []).map(Number)), T = new Set((L.types || []).map(Number)), q = wlQ.trim().toLowerCase();
+      <input type="text" class="wln" data-n="${i}" value="${esc(l.name)}"><span class="sub">✗${(l.pgroups || []).length + (l.ptypes || []).length} ✓${(l.groups || []).length + (l.types || []).length}</span>${WL.length > 1 ? `<span class="wld" data-d="${i}" title="Delete list">✕</span>` : ""}</div>`).join("")
+    + `<button id="wlNew">+ New list</button><button id="wlDef" title="Reset the selected list to the original ships: battleships, marauders, Black Ops, T3Cs, capitals, battlecruisers, command ships, Orca/Porpoise, exhumers — all pinged">Restore default ships</button>`;
+  const L = WL[wlSel], q = wlQ.trim().toLowerCase();
+  const gs = id => stateOf(L, "groups", id), ts_ = id => stateOf(L, "types", id);
+  const box = (st, attr, inh) => `<span class="tri s${st}${inh ? " inh" : ""}" ${attr}>${st === 2 ? "✗" : st === 1 ? "✓" : ""}</span>`;
   let html = "";
   for (const g of GROUPS) {
     const gm = !q || g.n.toLowerCase().includes(q), ts = q && !gm ? g.types.filter(t => t.n.toLowerCase().includes(q)) : g.types;
     if (!gm && !ts.length) continue;
-    const whole = G.has(g.id), picked = g.types.filter(t => T.has(t.id)).length, open = wlOpenG.has(g.id) || (q && !gm);
-    html += `<div class="wlg"><span class="tw" data-tw="${g.id}">${open ? "▾" : "▸"}</span><label><input type="checkbox" data-g="${g.id}" ${whole ? "checked" : ""}> <b>${esc(g.n)}</b></label>
-      <span class="sub">${whole ? "whole class" : picked ? picked + " of " + g.types.length : g.types.length + (g.types.length === 1 ? " ship" : " ships")}</span></div>`;
-    if (open) html += `<div class="wlt">` + ts.map(t => `<label class="${whole ? "dim" : ""}"><input type="checkbox" data-t="${t.id}" ${whole || T.has(t.id) ? "checked" : ""} ${whole ? "disabled" : ""}> ${esc(t.n)}</label>`).join("") + `</div>`;
+    const gst = gs(g.id), open = wlOpenG.has(g.id) || (q && !gm);
+    const np = g.types.filter(t => ts_(t.id) === 2).length, nw = g.types.filter(t => ts_(t.id) === 1).length;
+    html += `<div class="wlg"><span class="tw" data-tw="${g.id}">${open ? "▾" : "▸"}</span>${box(gst, `data-g="${g.id}"`)} <b>${esc(g.n)}</b>
+      <span class="sub">${gst === 2 ? "whole class pinged" : gst === 1 ? "whole class watched" : (np || nw) ? [np && np + " pinged", nw && nw + " watched"].filter(Boolean).join(", ") + " of " + g.types.length : g.types.length + (g.types.length === 1 ? " ship" : " ships")}</span></div>`;
+    if (open) html += `<div class="wlt">` + ts.map(t => { const st = ts_(t.id), eff = Math.max(st, gst); return `<label>${box(eff, `data-t="${t.id}"`, st < gst)} ${esc(t.n)}</label>`; }).join("") + `</div>`;
   }
   $("wlTree").innerHTML = html || `<div class="sub">No ships match "${esc(wlQ)}".</div>`;
 }
+function stateOf(L, kind, id) { return (L["p" + kind] || []).map(Number).includes(id) ? 2 : (L[kind] || []).map(Number).includes(id) ? 1 : 0; }
+function setState(L, kind, id, st) {
+  L[kind] = (L[kind] || []).map(Number).filter(x => x !== id); L["p" + kind] = (L["p" + kind] || []).map(Number).filter(x => x !== id);
+  if (st === 1) L[kind].push(id); if (st === 2) L["p" + kind].push(id);
+}
 $("wlPop").addEventListener("click", e => {
-  const d = e.target.dataset;
+  const d = e.target.dataset, L = WL[wlSel];
+  if (d.g !== undefined || d.t !== undefined) {                       // cycle: off -> ✓ watched -> ✗ pinged -> off
+    const kind = d.g !== undefined ? "groups" : "types", id = +(d.g ?? d.t), next = (stateOf(L, kind, id) + 1) % 3;
+    setState(L, kind, id, next); wlSave(); wlRender(); return;
+  }
   if (e.target.id === "wlPop" || e.target.id === "wlX") { $("wlPop").classList.remove("on"); return; }
-  if (e.target.id === "wlNew") { WL.push({ name: "List " + (WL.length + 1), on: true, groups: [], types: [] }); wlSel = WL.length - 1; wlSave(); wlRender(); return; }
-  if (d.d !== undefined) { if (confirmDel(+d.d)) { WL.splice(+d.d, 1); wlSel = 0; wlSave(); wlRender(); } return; }
+  if (e.target.id === "wlNew") { WL.push({ name: "List " + (WL.length + 1), on: true, groups: [], types: [], pgroups: [], ptypes: [] }); wlSel = WL.length - 1; wlSave(); wlRender(); return; }
+  if (d.d !== undefined) { const i = +d.d;
+    wlAsk(`Delete the list "${esc(WL[i].name)}"? This can't be undone.`, "Delete", () => { WL.splice(i, 1); wlSel = 0; wlSave(); wlRender(); }); return; }
+  if (e.target.id === "wlDef") { const L = WL[wlSel];
+    wlAsk(`Reset "${esc(L.name)}" to the default ships? Your changes to this list are replaced.`, "Restore", () => {
+      Object.assign(L, { groups: [], types: [], ptypes: [], pgroups: (SHIPDB.defaults || []).slice() }); wlSave(); wlRender(); }); return; }
+  if (e.target.id === "wlYes") { const f = wlAskFn; wlAskFn = null; $("wlAsk").classList.remove("on"); if (f) f(); return; }
+  if (e.target.id === "wlNo") { wlAskFn = null; $("wlAsk").classList.remove("on"); return; }
   if (d.tw !== undefined) { const g = +d.tw; wlOpenG.has(g) ? wlOpenG.delete(g) : wlOpenG.add(g); wlRender(); return; }
   const row = e.target.closest(".wli"); if (row && d.on === undefined && d.n === undefined) { wlSel = +row.dataset.i; wlRender(); }
 });
-let delArm = -1, delT = 0;
-function confirmDel(i) { if (delArm === i && Date.now() - delT < 3000) { delArm = -1; return true; } delArm = i; delT = Date.now();
-  const el = $("wlLists").querySelector(`[data-d="${i}"]`); if (el) { el.textContent = "delete?"; el.style.color = "#ff6b62"; } return false; }
+// in-window confirm box (browser dialogs don't work in this window)
+let wlAskFn = null;
+function wlAsk(msg, yes, fn) { wlAskFn = fn; $("wlAskMsg").innerHTML = msg; $("wlYes").textContent = yes; $("wlAsk").classList.add("on"); $("wlYes").focus(); }
 $("wlPop").addEventListener("change", e => {
   const d = e.target.dataset, L = WL[wlSel];
   if (d.on !== undefined) { WL[+d.on].on = e.target.checked; }
   else if (d.n !== undefined) { WL[+d.n].name = e.target.value.trim() || "List"; }
-  else if (d.g !== undefined) { const g = +d.g, s = new Set((L.groups || []).map(Number)); e.target.checked ? s.add(g) : s.delete(g); L.groups = [...s];
-    if (e.target.checked) { const ids = new Set(GROUPS.find(x => x.id === g).types.map(t => t.id)); L.types = (L.types || []).filter(t => !ids.has(+t)); } }
-  else if (d.t !== undefined) { const t = +d.t, s = new Set((L.types || []).map(Number)); e.target.checked ? s.add(t) : s.delete(t); L.types = [...s]; }
   else return;
   wlSave(); wlRender();
 });
 $("wlQ").addEventListener("input", e => { wlQ = e.target.value; wlRender(); });
-document.addEventListener("keydown", e => { if (e.key === "Escape") $("wlPop").classList.remove("on"); });
+document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if ($("wlAsk").classList.contains("on")) { wlAskFn = null; $("wlAsk").classList.remove("on"); } else $("wlPop").classList.remove("on"); });
 $("wlOpen").onclick = () => { wlRender(); $("wlPop").classList.add("on"); $("wlQ").focus(); };
 window.IGNORED = new Set();
 window.toggleIgnore = id => {

@@ -54,7 +54,7 @@ select{width:100%;background:#0d1014;color:var(--txt);border:1px solid var(--lin
 .keys{width:100%}.keys td{padding:2px}.keys input{width:150px}
 #wlPop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:50;align-items:center;justify-content:center}
 #wlPop.on{display:flex}
-#wlBox{width:min(900px,94vw);height:min(640px,90vh);background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;overflow:hidden}
+#wlBox{position:relative;width:min(900px,94vw);height:min(640px,90vh);background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;overflow:hidden}
 .wlh{display:flex;gap:12px;align-items:baseline;padding:12px 14px;border-bottom:1px solid var(--line)}.wlh b{font-size:15px}.wlh .sub{flex:1}
 #wlX{cursor:pointer;color:var(--mut);font-size:16px}#wlX:hover{color:#fff}
 .wlb{flex:1;display:flex;min-height:0}
@@ -66,6 +66,13 @@ select{width:100%;background:#0d1014;color:var(--txt);border:1px solid var(--lin
 #wlTree{flex:1;overflow:auto;margin-top:8px}
 .wlg{display:flex;align-items:center;gap:6px;padding:3px 0}.wlg .sub{margin-left:auto}
 .tw{cursor:pointer;width:14px;color:var(--mut);user-select:none}
+.tri{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1.5px solid #59626c;border-radius:4px;cursor:pointer;font-size:12px;font-weight:800;line-height:1;user-select:none;flex-shrink:0;vertical-align:middle}
+.tri.s1{border-color:#3ddc84;color:#3ddc84;background:rgba(61,220,132,.12)}.tri.s2{border-color:#ff3bd4;color:#ff3bd4;background:rgba(255,59,212,.14)}.tri.inh{opacity:.55}
+.wlt label{display:flex;align-items:center;gap:6px}
+#wlAsk{position:absolute;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;border-radius:12px}#wlAsk.on{display:flex}
+#wlAsk .ab{background:#1a2027;border:1px solid var(--line);border-radius:10px;padding:16px 18px;width:340px;display:flex;flex-direction:column;gap:12px}
+button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{background:#7a2a25}
+#wlDef{margin-top:6px}
 .wlt{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:2px 10px;padding:2px 0 8px 22px;font-size:12px}.wlt .dim{color:var(--mut)}
 </style>
 </head>
