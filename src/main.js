@@ -23,7 +23,7 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const TOKENS_FILE = path.join(DATA_DIR, "tokens.json");      // ESI refresh tokens — never share the data folder
 
-const MAP = JSON.parse(fs.readFileSync(path.join(HERE, "data.json"), "utf8"));   // big-map page layout (3 regions) until region views land
+const MAP = JSON.parse(fs.readFileSync(path.join(HERE, "data.json"), "utf8"));   // big-map layout: CCP position2D for all known space (scripts/build-map-data.py)
 const SHIPS = JSON.parse(fs.readFileSync(path.join(HERE, "ships.json"), "utf8"));
 
 // ------------------------------------------------------------- map / graph

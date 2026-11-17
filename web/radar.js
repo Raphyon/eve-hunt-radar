@@ -290,7 +290,12 @@ async function poll() {
     $("wCnt").textContent = `${d.watchCount} systems currently watched` + (d.watchCount ? "" : " — log in and jump once so the radar knows where you are");
     RA.ws = { g: new Set((d.watch || {}).g || []), t: new Set((d.watch || {}).t || []) };
     applyUi(d); renderApp(d); renderJump(d); RA.jump = d.jump || []; RA.jumpReach = d.jumpReach || []; RA.si = d.sysInfo || {}; window.IGNORED = new Set(d.ignoredIds || []);
-    renderFeed(); renderChars(); renderLocal(); renderBest(); drawPulses(); drawHeat(); drawNodes();
+    renderFeed(); renderChars(); renderLocal(); renderBest(); drawPulses(); drawHeat();
+    // nodes are 5k+ elements: only rebuild when what they show changed (Local counts, ignore list)
+    const sig = JSON.stringify([RA.lc, [...window.IGNORED].sort(), Math.floor(Date.now() / 300000)]);
+    if (sig !== RA.nodeSig) { RA.nodeSig = sig; drawNodes(); }
+    // first load: start zoomed on the character you're flying
+    if (!RA.centered) { const c = RA.chars.find(c => c.active && S[c.sys]) || RA.chars.find(c => c.running && S[c.sys]); if (c) { RA.centered = true; centerOn(S[c.sys], .8); } }
   } catch (e) { $("rStatus").innerHTML = `<span style="color:#ff6b6b">Lost contact with the radar — is its window still open?</span>`; }
 }
 window.addEventListener("focus", () => document.title = "Hunt radar");
