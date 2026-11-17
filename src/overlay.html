@@ -148,7 +148,7 @@ function drawMini(d, me) {
   const svg = $("svg"); svg.innerHTML = "";
   const J = d.settings.overlay.mapJumps || 4;
   let center = me && S[me.sys] ? me.sys : null;
-  if (!center) { const t = (d.settings.camp || "").split(",")[0].trim().toLowerCase(); const s = DATA.sys.find(x => x.n.toLowerCase() === t); center = s ? s.id : DATA.sys[0].id; }
+  if (!center) { const t = (d.settings.watched || "").split(",")[0].trim().toLowerCase(); const s = DATA.sys.find(x => x.n.toLowerCase() === t); center = s ? s.id : DATA.sys[0].id; }
   const dist = bfs(center, J); const ids = Object.keys(dist).map(Number);
   const pos = miniLayout(center, ids);
   // fill the panel: stretch x and y independently into pixel space (labels stay crisp, no wasted margins)
@@ -174,7 +174,7 @@ function drawMini(d, me) {
   const by = {}; ST.evs.forEach(e => { if (!inSet.has(e.sys)) return; const m = (Date.now() - Date.parse(e.time)) / 60000; if (m > 30) return; const h = hitEv(e, d); const o = by[e.sys]; if (!o || h > o.h || (h === o.h && m < o.m)) by[e.sys] = { h, m }; });
   for (const sid in by) { const [x, y] = P(+sid), o = by[sid], op = Math.max(.25, 1 - o.m / 30); el("circle", { cx: x, cy: y, r: (o.h ? 15 : 12) * k, fill: o.h ? "#ff3bd4" : "none", "fill-opacity": o.h ? op * .25 : 0, stroke: o.h ? "#ff3bd4" : "#d0d7de", "stroke-width": (o.h ? 2.5 : 1.5) * k, "stroke-opacity": op }, svg); }
   // systems
-  const camp = new Set((d.settings.camp || "").split(/[,\n;]+/).map(t => t.trim().toLowerCase()));
+  const camp = new Set((d.settings.watched || "").split(/[,\n;]+/).map(t => t.trim().toLowerCase()));
   ids.forEach(id => {
     const s = S[id], [x, y] = P(id), low = dispSec(s.s) < .5;
     if (IGN.has(id)) { el("circle", { cx: x, cy: y, r: 5, fill: "#2a2f36", stroke: "#4a535d", "stroke-width": 1 }, svg); const t = el("text", { x, y: y - 8, "text-anchor": "middle", "font-size": 10, fill: "#5b636d" }, svg); t.textContent = s.n; return; }
