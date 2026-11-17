@@ -1,6 +1,5 @@
 # Hunt Radar Windows helper — runs hidden, talks JSON lines over stdin/stdout.
 # Commands:  WIN                -> {"titles":[...EVE character names...],"fg":"name or null"}
-#            OCR x y w h path   -> {"lines":[...]}  (screenshot of that screen rect, read with Windows OCR)
 #            OCRL x y w h path  -> {"lines":[{"t":text,"y":center-y in the rect}]}  (one Local row lookup)
 #            HOOK ON|OFF        -> watch for MIDDLE-clicks only (for the pilot lookup); WIN then also returns "clicks"
 # Reads window titles only (like EVE-O Preview). Never reads or writes EVE's memory.
@@ -49,8 +48,6 @@ public static class HR {
   [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
   [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr v);
-  [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
-  [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
   static string Title(IntPtr h) { int n = GetWindowTextLengthW(h); if (n == 0) return ""; var sb = new StringBuilder(n + 1); GetWindowTextW(h, sb, n + 1); return sb.ToString(); }
   public static string[] EveTitles() {
     var list = new List<string>();
@@ -58,7 +55,6 @@ public static class HR {
     return list.ToArray();
   }
   public static string Foreground() { var t = Title(GetForegroundWindow()); return t.StartsWith("EVE - ") ? t.Substring(6).Trim() : null; }
-  }
 }
 '@
 try { if (-not [HR]::SetProcessDpiAwarenessContext([IntPtr](-4))) { [void][HR]::SetProcessDPIAware() } } catch { [void][HR]::SetProcessDPIAware() }
