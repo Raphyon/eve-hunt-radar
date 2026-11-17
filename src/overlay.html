@@ -33,6 +33,7 @@ svg{width:100%;height:100%;display:block}
 #alist{display:none;padding:3px 10px 5px;border-top:1px solid rgba(255,255,255,.06);font-size:11.5px;max-height:58px;overflow:hidden}
 #wrap.map #alist{display:block}
 #alist div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#hlp{display:none;padding:3px 10px 4px;border-top:1px solid rgba(255,77,77,.35);background:rgba(255,77,77,.12);color:#ff8a8a;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #snap{position:absolute;right:10px;bottom:6px;font-size:11px;color:var(--amb);display:none}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
 </style></head>
@@ -45,6 +46,7 @@ svg{width:100%;height:100%;display:block}
   <div id="mm"><svg id="svg"></svg></div>
   <div id="jump" class="row"></div>
   <div id="alist"></div>
+  <div id="hlp"></div>
   <div id="snap"></div>
 </div>
 <script>
@@ -112,6 +114,8 @@ function render() {
   // alert list (map mode)
   $("alist").innerHTML = recentAl.slice(-3).reverse().map(a => `<div><span class="al ${a.nearMe ? "n" : "w"}">${a.nearMe ? "◉" : "⚠"} ${esc(a.sysName)}</span> <span class="mut">${dtxt(a)} · ${ago(a.t)}</span>${jtag(a)} ${esc(a.what)}</div>`).join("") || `<div class="mut">No alerts yet.</div>`;
   const J = d.jump || []; $("jump").classList.toggle("on", J.length > 0); $("jump").innerHTML = jumpHtml(J);
+  const hp = d.helper; $("hlp").style.display = hp && hp.ok === false ? "block" : "none";
+  if (hp && hp.ok === false) { $("hlp").textContent = "⚠ Windows helper failed — no active character / middle-click. " + hp.err; $("hlp").title = hp.err; }
   const sn = d.snap; const sv = sn.msg && Date.now() / 1000 - sn.t < 15;
   $("snap").style.display = sv ? "block" : "none"; $("snap").textContent = sv ? sn.msg : "";
   if (d.ui.mode === "map") drawMini(d, me);

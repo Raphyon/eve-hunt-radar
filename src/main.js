@@ -267,10 +267,11 @@ function bestNearby(maxj = 6, n = 8) {
 }
 
 // ------------------------------------------------------------- Windows helper (window titles, OCR, keys)
-const helper = { proc: null, ready: false, queue: [], buf: "" };
+const helper = { proc: null, ready: false, queue: [], buf: "", err: "", exits: 0, startedAt: 0, winFails: 0 };
 function startHelper() {
   if (process.platform !== "win32") return;
   const ps1 = path.join(HERE_UNPACKED, "win.ps1");
+  helper.startedAt = Date.now();
   helper.proc = cp.spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1], { windowsHide: true });
   helper.proc.stdout.setEncoding("utf8");
   helper.proc.stdout.on("data", d => {
@@ -278,12 +279,23 @@ function startHelper() {
     while ((i = helper.buf.indexOf("\n")) >= 0) {
       const line = helper.buf.slice(0, i).trim(); helper.buf = helper.buf.slice(i + 1); if (!line) continue;
       let j; try { j = JSON.parse(line); } catch { continue; }
-      if (j.ready) { helper.ready = true; log("windows helper ready"); setTimeout(syncHook, 100); continue; }
+      if (j.ready) { helper.ready = true; helper.err = ""; helper.exits = 0; log("windows helper ready"); setTimeout(syncHook, 100); continue; }
       const w = helper.queue.shift(); if (w) w(j);
     }
   });
-  helper.proc.stderr.on("data", d => log("helper:", String(d).trim().slice(0, 200)));
-  helper.proc.on("exit", () => { helper.ready = false; helper.queue.splice(0).forEach(w => w({ error: "helper exited" })); setTimeout(startHelper, 3000); });
+  helper.proc.stderr.on("data", d => { const t = String(d).trim(); log("helper:", t.slice(0, 200)); if (t) helper.err = (helper.err + " " + t).trim().slice(-600); });
+  helper.proc.on("exit", code => { helper.ready = false; helper.exits++; if (!helper.err) helper.err = "PowerShell exited (code " + code + ")";
+    helper.queue.splice(0).forEach(w => w({ error: "helper exited" })); setTimeout(startHelper, helper.exits > 5 ? 30000 : 3000); });
+  helper.proc.on("error", e => { helper.err = "couldn't start PowerShell: " + e.message; });
+}
+// null = not Windows / still starting · {ok:true} · {ok:false, err} (shown in the overlay and settings)
+function helperStatus() {
+  if (process.env.HR_FAKE_HELPER_ERR) return { ok: false, err: process.env.HR_FAKE_HELPER_ERR };   // test hook
+  if (process.platform !== "win32") return null;
+  if (helper.ready && helper.winFails < 5) return { ok: true };
+  if (!helper.ready && helper.exits === 0 && Date.now() - helper.startedAt < 25000) return null;
+  const e = (helper.err || (helper.ready ? "window reads keep failing" : "PowerShell helper didn't start")).replace(/\s+/g, " ");
+  return { ok: false, err: e.length > 300 ? e.slice(0, 300) + "…" : e };
 }
 function helperCmd(cmd, timeout = 15000) {
   return new Promise(res => {
@@ -299,7 +311,7 @@ async function eveWindows() {
     const f = process.env.HR_FAKE_WINDOWS; if (!f) return null;
     const [list, fg] = f.split(";fg="); return { titles: list.split("|").filter(Boolean), fg: fg || null };
   }
-  const j = await helperCmd("WIN", 3000); if (j.error) return null;
+  const j = await helperCmd("WIN", 3000); if (j.error) { if (helper.ready) { helper.winFails++; helper.err = "WIN: " + j.error; } return null; } helper.winFails = 0;
   const arr = v => Array.isArray(v) ? v : (v ? [v] : []);           // PowerShell may unwrap 1-item arrays
   let clicks = arr(j.clicks); if (clicks.length === 2 && typeof clicks[0] === "number") clicks = [clicks];
   return { titles: arr(j.titles), fg: j.fg || null, clicks };
@@ -872,7 +884,7 @@ function sysInfo() {
 function statePayload(q) {
   const since = +(q.get("since") || 0), asince = +(q.get("asince") || 0);
   return {
-    version: VERSION, status, heat, heatAt, events: events.filter(e => e.n > since), alerts: alerts.filter(a => a.n > asince),
+    version: VERSION, status, helper: helperStatus(), heat, heatAt, events: events.filter(e => e.n > since), alerts: alerts.filter(a => a.n > asince),
     chars: charView(), local: localView(), best: bestNearby(), localCounts, settings, chatlogs: chatlog,
     jump: jumpView().map(j => Object.assign({}, j, { inRange: undefined, inRangeCount: j.inRange.length })), jumpToons: jumpToonsView(), jumpClasses: JUMP, ignoredIds: [...ignored()], watch: { g: [...watchSets().g], t: [...watchSets().t], pg: [...watchSets().pg], pt: [...watchSets().pt] },
     jumpReach: [...new Set(jumpView().flatMap(j => j.inRange))], watchCount: watchSet().size, sysInfo: sysInfo(),

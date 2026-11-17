@@ -104,6 +104,7 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
    <div class="sub" id="rStatus">connecting…</div>
    <h2>App</h2>
    <div class="sub" id="updSt">…</div>
+   <div id="hlpErr" class="sub" style="display:none;color:#ff8a8a;background:rgba(255,77,77,.12);border:1px solid rgba(255,77,77,.35);border-radius:6px;padding:6px 8px;margin:8px 0;user-select:text"></div>
    <div class="row"><button id="updCheck">Check for updates</button><button id="updGo" style="display:none">Restart to update</button></div>
    <label class="chk"><input type="checkbox" id="autoSt"> Start Hunt Radar with Windows</label>
    <div class="row"><button id="impOld">Import settings from old zip version</button><button id="openData">Open settings folder</button></div>
@@ -657,6 +658,8 @@ function applyUi(d) {
   RA.ui = d.ui; const st = d.settings;
   $("ovEdit").textContent = d.ui.edit ? "Lock overlay 🔒" : "Edit / move overlay";
   const ks = d.ui.keys || {}; $("kEditS").textContent = ks.edit === "ok" ? "✓" : ks.edit || ""; $("kModeS").textContent = ks.mode === "ok" ? "✓" : ks.mode || "";
+  const hp = d.helper; $("hlpErr").style.display = hp && hp.ok === false ? "block" : "none";
+  if (hp && hp.ok === false) $("hlpErr").textContent = "⚠ Windows helper failed, so active character, window titles and middle-click lookup are off. Send this to Amund: " + hp.err;
   const sn = d.snap; $("snMsg").textContent = sn.msg ? sn.msg + " · " + agoS(sn.t) + " ago" : (st.localArea ? "Local area set." : "No Local area marked yet.");
   if (uiLoaded) return; uiLoaded = true;
   $("ovOp").value = st.overlay.opacity; $("opV").textContent = Math.round(st.overlay.opacity * 100) + "%"; $("ovJ").value = String(st.overlay.mapJumps || 4);

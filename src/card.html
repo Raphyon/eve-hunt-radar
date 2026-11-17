@@ -92,7 +92,7 @@ function actHtml(a) {
 function seenHtml(list) {
   if (!list || !list.length) return "";
   return `<h4><span class="ic">👁</span>Seen here recently</h4>` + list.map(z => `<div class="row">${shipImg(z.type)}<div class="rt">
-      <div class="r1"><span class="tag ${z.watched && z.role === "attacker" ? "wat" : z.role === "victim" ? "loss" : "att"}">${z.role === "victim" ? "DIED" : "ON KILL"}</span>${esc(z.ship)}</div>
+      <div class="r1"><span class="tag ${z.watched && z.role === "attacker" ? "wat" : z.role === "victim" ? "loss" : "att"}">${z.role === "victim" ? "DIED" : "ON KILL"}</span>${z.role === "victim" ? esc(z.ship) : `<span class="mut">flying</span> ${esc(z.ship)}`}</div>
       <div class="r2">${sysLink(z.sys, z.sec)} · ${ago(z.t)} ago</div></div></div>`).join("");
 }
 function topHtml(s) {
