@@ -28,14 +28,19 @@ jobs:
         run: |
           v=$(node -p "require('./package.json').version")
           [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "Tag ${GITHUB_REF_NAME} != package.json v$v"; exit 1; }
-      - name: Create the version tag (manual runs)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Build installer
+        run: npm run dist
+      - name: Publish release (installer + latest.yml for auto-update)
         shell: bash
-        run: |
-          v="v$(node -p "require('./package.json').version")"
-          git tag "$v" 2>/dev/null || echo "tag $v exists"
-          git push origin "$v" || echo "tag $v already on GitHub"
-      - name: Build and publish installer
-        run: npm run release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          files=(dist/*.exe dist/*.blockmap dist/latest.yml)
+          ls -la "${files[@]}"
+          if gh release view "$v" >/dev/null 2>&1; then
+            gh release upload "$v" "${files[@]}" --clobber
+          else
+            gh release create "$v" "${files[@]}" --title "Hunt Radar $v" --generate-notes --target "$GITHUB_SHA"
+          fi
+          gh release view "$v" --json assets -q '.assets[].name'
