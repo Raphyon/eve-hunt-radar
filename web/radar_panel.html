@@ -44,10 +44,19 @@
    <h2>Alert on these ships</h2>
    <div id="classes" class="cls"></div>
    <label class="chk"><input type="checkbox" id="pVictim" checked> Also alert when one of them is the victim</label>
-   <label class="chk"><input type="checkbox" id="pNear" checked> <b>Near-me alert</b> (special sound): any lowsec PvP kill within
-     <select id="pNearR" style="width:auto;display:inline"><option>2</option><option>3</option><option>4</option><option selected>5</option><option>7</option></select> jumps of the character you're flying</label>
-   <label>Watched-ship alert range from your targets or characters</label>
-   <select id="pRange"><option value="99">Whole map</option><option value="5">≤ 5 jumps</option><option value="3" selected>≤ 3 jumps</option><option value="1">≤ 1 jump</option></select>
+   <h2>Watch range</h2>
+   <div class="sub">Kills outside this range are ignored completely. Highsec and wormholes are never watched.</div>
+   <label class="chk"><input type="checkbox" id="wJOn" checked> within <input id="wJ" type="number" min="1" max="60" style="width:56px"> gate jumps of any of my characters</label>
+   <label class="chk"><input type="checkbox" id="wLOn" checked> within <input id="wL" type="number" min="1" max="40" step="0.5" style="width:56px"> LY of my jump toons</label>
+   <div class="row" style="gap:14px"><label class="chk"><input type="checkbox" id="spL" checked> lowsec</label><label class="chk"><input type="checkbox" id="spN" checked> nullsec</label><label class="chk"><input type="checkbox" id="spP" checked> Pochven</label></div>
+   <div class="sub" id="wCnt"></div>
+   <h2>Beeps</h2>
+   <label>Beep radius: kills within <select id="pNearR" style="width:auto;display:inline"><option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option><option>7</option><option>10</option></select> jumps of the character you're flying</label>
+   <label class="chk"><input type="checkbox" id="pNear" checked> any PvP kill in the beep radius → low klaxon (watched ships always beep)</label>
+   <label>Camp/hunt targets: watched ships within</label>
+   <select id="pRange"><option value="1">≤ 1 jump</option><option value="3" selected>≤ 3 jumps</option><option value="5">≤ 5 jumps</option></select>
+   <div class="sub">of a camp spot or hunting ground still beep, wherever you are (inside the watch range).</div>
+   <label>At most one beep every <select id="bGap" style="width:auto;display:inline"><option value="0">0</option><option value="5">5</option><option selected value="10">10</option><option value="20">20</option><option value="30">30</option></select> seconds</label>
    <label>Heat (ESI, last hour)</label>
    <select id="heatMode"><option value="off">Off</option><option value="j">Jumps</option><option value="k">Ship kills</option><option value="n" selected>NPC kills (ratting)</option></select>
    <h2>Busiest lowsec, last hour (ESI)</h2>

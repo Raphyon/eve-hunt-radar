@@ -48,7 +48,10 @@ svg{width:100%;height:100%;display:block}
   <div id="snap"></div>
 </div>
 <script>
-const DATA = __DATA__, GC = __SHIPS__;
+const U = __DATA__, GC = __SHIPS__;
+// whole known universe; x/y = top-down projection (x, -z) of real positions, only used to seed the layout
+const DATA = { sys: U.sys.map(([id, n, sec, ri, ci, x, y, z]) => ({ id, n, s: sec, r: U.regions[ri][1], x: x == null ? 0 : x * 40, y: z == null ? 0 : -z * 40 })),
+  gates: U.gates.map(([a, b]) => [U.sys[a][0], U.sys[b][0]]) };
 const S = {}; DATA.sys.forEach(s => S[s.id] = s);
 const ADJ = {}; DATA.sys.forEach(s => ADJ[s.id] = []); DATA.gates.forEach(([a, b]) => { ADJ[a].push(b); ADJ[b].push(a); });
 const dispSec = s => (s > 0 && s < 0.05) ? 0.1 : Math.floor(s * 10 + 0.5) / 10;
@@ -74,7 +77,7 @@ function hitEv(e, st) { return dispSec(S[e.sys].s) < 0.5 && (e.attackers.some(p 
 const dtxt = a => a.meDist != null ? `${a.meDist}j from you` : `${a.dist}j from ${esc(a.near)}`;
 function jumpHtml(J) {
   return J.map(j => `<span class="jt">⤳ ${esc(j.name)}</span><span class="mut">${esc(j.clsName)} ${j.range} LY ${j.jdcKnown ? "(JDC " + j.jdc + ")" : "(JDC V assumed)"} · ${esc(j.sysName || "?")}</span>` +
-    (j.known ? `<span class="mut">${j.inRange.length} lowsec systems in range</span>` : `<span class="mut">locating…</span>`)).join("<span style='flex-basis:100%;height:0'></span>");
+    (j.known ? `<span class="mut">${j.inRangeCount} systems in range</span>` : `<span class="mut">locating…</span>`)).join("<span style='flex-basis:100%;height:0'></span>");
 }
 const jtag = a => (a.jumpers || []).length ? ` <span class="ok" title="in jump range of ${esc(a.jumpers.join(", "))}">⤳✓</span>` : "";
 function render() {
@@ -124,8 +127,8 @@ const LAYOUT = {};
 function miniLayout(center, ids) {
   const key = center + ":" + ids.length; if (LAYOUT[key]) return LAYOUT[key];
   let seed = center % 2147483647 || 1; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;   // same layout every time
-  const set = new Set(ids), K = 70, cx = S[center].x * 1.55, cy = S[center].y * 1.25;
-  const p = {}; ids.forEach(id => { p[id] = [(S[id].x * 1.55 - cx) * .5 + (rnd() - .5), (S[id].y * 1.25 - cy) * .5 + (rnd() - .5)]; });
+  const set = new Set(ids), K = 70, cx = S[center].x, cy = S[center].y;
+  const p = {}; ids.forEach(id => { p[id] = [(S[id].x - cx) + (rnd() - .5) * 20, (S[id].y - cy) + (rnd() - .5) * 20]; });
   const E = DATA.gates.filter(([a, b]) => set.has(a) && set.has(b));
   let T = 60;
   for (let it = 0; it < 350; it++) {
@@ -144,16 +147,17 @@ function miniLayout(center, ids) {
 function drawMini(d, me) {
   const svg = $("svg"); svg.innerHTML = "";
   const J = d.settings.overlay.mapJumps || 4;
-  let center = me && me.inMap ? me.sys : null;
+  let center = me && S[me.sys] ? me.sys : null;
   if (!center) { const t = (d.settings.camp || "").split(",")[0].trim().toLowerCase(); const s = DATA.sys.find(x => x.n.toLowerCase() === t); center = s ? s.id : DATA.sys[0].id; }
   const dist = bfs(center, J); const ids = Object.keys(dist).map(Number);
   const pos = miniLayout(center, ids);
   // fill the panel: stretch x and y independently into pixel space (labels stay crisp, no wasted margins)
-  const W = Math.max(svg.clientWidth, 120), Hh = Math.max(svg.clientHeight, 100), mx = 34, myT = 20, myB = 14;
-  const xs = ids.map(i => pos[i][0]), ys = ids.map(i => pos[i][1]);
-  const ax = Math.min(...xs), bx = Math.max(...xs), ay = Math.min(...ys), by_ = Math.max(...ys);
-  const sx = (W - 2 * mx) / Math.max(bx - ax, 1), sy = (Hh - myT - myB) / Math.max(by_ - ay, 1);
-  const PP = {}; ids.forEach(i => PP[i] = [mx + (pos[i][0] - ax) * sx, myT + (pos[i][1] - ay) * sy]);
+  const W = Math.max(svg.clientWidth, 120), Hh = Math.max(svg.clientHeight, 100), mx = 30, myT = 18, myB = 12;
+  // spread: blend each axis half "true layout" and half "rank order", so tight clusters open up and the panel is filled evenly
+  const spread = (vals) => { const n = vals.length, lo = Math.min(...vals), hi = Math.max(...vals), order = vals.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]), rank = new Array(n);
+    order.forEach(([, i], r) => rank[i] = n > 1 ? r / (n - 1) : .5); return vals.map((v, i) => .45 * ((v - lo) / Math.max(hi - lo, 1e-9)) + .55 * rank[i]); };
+  const nx = spread(ids.map(i => pos[i][0])), ny = spread(ids.map(i => pos[i][1]));
+  const PP = {}; ids.forEach((i, k) => PP[i] = [mx + nx[k] * (W - 2 * mx), myT + ny[k] * (Hh - myT - myB)]);
   const P = id => PP[id];
   svg.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
   const k = 1;
@@ -180,7 +184,7 @@ function drawMini(d, me) {
     const hh = H[id]; if (hh && hh[3] && low) { const tt = el("text", { x: x - 8 * k, y: y + 12 * k, "text-anchor": "end", "font-size": 9 * k, "font-weight": 700, fill: "#ffb38a" }, svg); tt.textContent = hh[3]; }
   });
   // jump range: violet ring on lowsec systems within range of any jump toon
-  const inR = new Set((d.jump || []).flatMap(j => j.inRange || []));
+  const inR = new Set(d.jumpReach || []);
   ids.forEach(id => { if (inR.has(id)) { const [x, y] = P(id); el("circle", { cx: x, cy: y, r: 9.5, fill: "none", stroke: "#a78bfa", "stroke-width": 1.6, "stroke-dasharray": "3 2" }, svg); } });
   // you
   d.chars.filter(c => c.running && c.inMap && inSet.has(c.sys)).forEach(c => { const [x, y] = P(c.sys); el("circle", { cx: x, cy: y, r: 10 * k, fill: "none", stroke: "#3ddc84", "stroke-width": 2.5 * k }, svg); });
@@ -192,9 +196,10 @@ async function poll() {
     for (const e of d.events) { ST.evs.push(e); ST.last = Math.max(ST.last, e.n); }
     if (ST.evs.length > 400) ST.evs.splice(0, ST.evs.length - 400);
     ST.recent = (ST.recent || []).concat(d.alerts).slice(-20); d.recentAlerts = ST.recent;
-    if (ST.alast >= 0 && d.alerts.length && d.settings.sound !== false) {
-      const nm = d.alerts.some(a => a.nearMe), w = d.alerts.some(a => a.watched);
-      play(nm && w ? "both" : nm ? "near" : d.alerts.some(a => a.attacker) ? "watched" : "victim");
+    const loud = d.alerts.filter(a => !a.silent);
+    if (ST.alast >= 0 && loud.length && d.settings.sound !== false) {
+      const nm = loud.some(a => a.nearMe), w = loud.some(a => a.watched);
+      play(w ? "watched" : nm ? "near" : "victim");                     // watched ship = bright beep, other PvP near you = klaxon
       ST.flashT = Date.now(); $("wrap").classList.add(nm ? "flashN" : "flashW");
     }
     if (d.alerts.length) ST.alast = d.alerts[d.alerts.length - 1].n; else if (ST.alast < 0) ST.alast = 0;
