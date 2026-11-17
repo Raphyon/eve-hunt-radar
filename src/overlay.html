@@ -188,8 +188,9 @@ function drawMini(d, me) {
   ids.forEach(id => {
     const s = S[id], [x, y] = P(id), low = dispSec(s.s) < .5;
     if (IGN.has(id)) { el("circle", { cx: x, cy: y, r: 5, fill: "#2a2f36", stroke: "#4a535d", "stroke-width": 1 }, svg); const t = el("text", { x, y: y - 8, "text-anchor": "middle", "font-size": 10, fill: "#5b636d" }, svg); t.textContent = s.n; return; }
-    el("circle", { cx: x, cy: y, r: 6, fill: low ? "#c46a22" : "#3a424b", stroke: camp.has(s.n.toLowerCase()) ? "#ff3b30" : low ? "#e0863a" : "#59626c", "stroke-width": (camp.has(s.n.toLowerCase()) ? 2.2 : 1) * k }, svg);
-    const t = el("text", { x, y: y - 9, "text-anchor": "middle", "font-size": id === center ? 13 : 11.5, "font-weight": id === center ? 800 : 600, fill: low ? "#f2c7a0" : "#9aa4ae", "paint-order": "stroke", stroke: "rgba(10,13,17,.9)", "stroke-width": 3 * k }, svg); t.textContent = s.n;
+    const nul = dispSec(s.s) <= 0;      // nullsec: dark red, lowsec: orange, highsec: grey
+    el("circle", { cx: x, cy: y, r: 6, fill: nul ? "#8e2a30" : low ? "#c46a22" : "#3a424b", stroke: camp.has(s.n.toLowerCase()) ? "#ff3b30" : nul ? "#c0444c" : low ? "#e0863a" : "#59626c", "stroke-width": (camp.has(s.n.toLowerCase()) ? 2.2 : 1) * k }, svg);
+    const t = el("text", { x, y: y - 9, "text-anchor": "middle", "font-size": id === center ? 13 : 11.5, "font-weight": id === center ? 800 : 600, fill: nul ? "#eab0b4" : low ? "#f2c7a0" : "#9aa4ae", "paint-order": "stroke", stroke: "rgba(10,13,17,.9)", "stroke-width": 3 * k }, svg); t.textContent = s.n;
     const lc = d.localCounts[id]; if (lc && Date.now() / 1000 - lc[1] < 1800) { const tt = el("text", { x: x + 8 * k, y: y + 12 * k, "font-size": 9.5 * k, "font-weight": 800, fill: "#3ddc84" }, svg); tt.textContent = "👥" + lc[0]; }
     const hh = H[id]; if (hh && hh[3] && low) { const tt = el("text", { x: x - 8 * k, y: y + 12 * k, "text-anchor": "end", "font-size": 9 * k, "font-weight": 700, fill: "#ffb38a" }, svg); tt.textContent = hh[3]; }
   });

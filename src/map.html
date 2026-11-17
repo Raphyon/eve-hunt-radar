@@ -258,18 +258,20 @@ function drawRegions() {
   }
 }
 
-// edges
-const edgeEls = [];
-function drawEdges() {
-  const g = $("gEdges"); g.innerHTML = ""; edgeEls.length = 0;
+// edges: a handful of <path>s, not 7,000 <line>s (the whole cluster is drawn at once)
+function drawEdges(V) {          // V = area to draw (zoomed in); none = everything (zoomed out)
+  const g = $("gEdges"); g.innerHTML = "";
+  const dim = $("cDim").checked, P = { n: [], x: [], f: [] };
+  const outside = (A, B) => V && (Math.max(A.px, B.px) < V.x0 || Math.min(A.px, B.px) > V.x1 || Math.max(A.py, B.py) < V.y0 || Math.min(A.py, B.py) > V.y1);
   DATA.gates.forEach(([a, b]) => {
-    const A = S[a], B = S[b];
-    const l = el("line", { stroke: "#5b636d", "stroke-width": A.r !== B.r ? 1.8 : 1.2, "stroke-dasharray": A.r !== B.r ? "6 4" : "", "stroke-opacity": .9 }, g);
-    edgeEls.push([l, A, B]);
+    const A = S[a], B = S[b]; if (outside(A, B)) return;
+    const seg = `M${A.px.toFixed(0)} ${A.py.toFixed(0)}L${B.px.toFixed(0)} ${B.py.toFixed(0)}`;
+    (dim && !(dist[a] <= 2 && dist[b] <= 2) ? P.f : A.r !== B.r ? P.x : P.n).push(seg);
   });
-  posEdges();
+  if (P.n.length) el("path", { d: P.n.join(""), stroke: "#5b636d", "stroke-width": 1.2, "stroke-opacity": .9, fill: "none" }, g);
+  if (P.x.length) el("path", { d: P.x.join(""), stroke: "#5b636d", "stroke-width": 1.8, "stroke-dasharray": "6 4", "stroke-opacity": .9, fill: "none" }, g);
+  if (P.f.length) el("path", { d: P.f.join(""), stroke: "#5b636d", "stroke-width": 1.2, "stroke-opacity": .14, fill: "none" }, g);
 }
-function posEdges() { edgeEls.forEach(([l, A, B]) => { l.setAttribute("x1", A.px); l.setAttribute("y1", A.py); l.setAttribute("x2", B.px); l.setAttribute("y2", B.py); }); }
 
 // stubs to other regions
 function drawStubs() {
@@ -291,32 +293,69 @@ function drawStubs() {
   });
 }
 
-// nodes
-const nodeEls = {};
-function drawNodes() {
-  const g = $("gNodes"); g.innerHTML = "";
-  const T = new Set([...camp, ...hunt]);
-  const dim = $("cDim").checked, showEyes = false;
-  DATA.sys.forEach(s => {
-    const grp = el("g", { class: "nd", transform: `translate(${s.px},${s.py})` }, g);
-    const w = Math.max(54, s.n.length * 6.4 + 14), h = 28;
-    const isC = camp.has(s.id), isH = hunt.has(s.id), isE = showEyes && eyes.has(s.id);
-    if (isC) el("rect", { x: -w / 2 - 7, y: -h / 2 - 7, width: w + 14, height: h + 14, rx: 11, fill: "none", stroke: "#ff3b3b", "stroke-width": 4 }, grp);
-    if (isH) el("rect", { x: -w / 2 - 5, y: -h / 2 - 5, width: w + 10, height: h + 10, rx: 10, fill: "none", stroke: "#ffb020", "stroke-width": 4 }, grp);
-    if (isE) el("rect", { x: -w / 2 - 5, y: -h / 2 - 5, width: w + 10, height: h + 10, rx: 10, fill: "none", stroke: "#39c6ff", "stroke-width": 1.6, "stroke-dasharray": "4 3", "stroke-opacity": .8 }, grp);
-    const low = dispSec(s.s) < 0.5, hot = isC || isH;
-    el("rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: 7, fill: low ? "#5a2e0e" : "#1a1f25", stroke: secColours ? secCol(s.s) : low ? "#b8621f" : "#3a424b", "stroke-width": low || secColours ? 1.6 : 1 }, grp);
-    const t = el("text", { y: -1, "text-anchor": "middle", "font-size": 11, "font-weight": hot ? 800 : 600, fill: hot ? "#fff" : "#b9c1ca" }, grp); t.textContent = s.n;
-    const t2 = el("text", { y: 10.5, "text-anchor": "middle", "font-size": 8, fill: "#7f8a96" }, grp); t2.textContent = dispSec(s.s).toFixed(1) + " · " + s.c;
-    if (dim && !(dist[s.id] <= 2)) grp.setAttribute("opacity", .22);
-    else if (!low && !hot) grp.setAttribute("opacity", .38);
-    if (window.IGNORED && window.IGNORED.has(s.id)) grp.setAttribute("opacity", .28);
-    if (window.radarNode) radarNode(s, grp, w, h);
-    grp.addEventListener("click", e => { e.stopPropagation(); select(s.id, false); });
-    nodeEls[s.id] = grp;
-  });
-  edgeEls.forEach(([l, A, B]) => l.setAttribute("opacity", dim && !(dist[A.id] <= 2 && dist[B.id] <= 2) ? .15 : 1));
+// nodes. Zoomed out: every system as a dot (a few <path>s). Zoomed in: full boxes, but only for what's on screen
+// (+ a margin), rebuilt when panning/zooming stops. Keeps 5k+ systems smooth.
+const NEAR = .5;                     // zoom level where boxes + names appear
+let nodeEls = {}, built = null, flashId = null;
+const secClass = s => { const d = dispSec(s.s); return d >= .5 ? "h" : d > 0 ? "l" : "n"; };   // high / low / null
+const NODE = { h: ["#1a1f25", "#3a424b"], l: ["#5a2e0e", "#b8621f"], n: ["#4a1216", "#a8323a"] };   // fill, stroke
+function viewRect(pad) {
+  const r = svg.getBoundingClientRect(), w = r.width / view.k, h = r.height / view.k, x0 = -view.x / view.k, y0 = -view.y / view.k;
+  return { x0: x0 - w * pad, y0: y0 - h * pad, x1: x0 + w * (1 + pad), y1: y0 + h * (1 + pad) };
 }
+function drawNodes() {
+  const g = $("gNodes"); g.innerHTML = ""; nodeEls = {};
+  const dim = $("cDim").checked, IGN = window.IGNORED || new Set();
+  if (view.k < NEAR) {
+    const D = {}, add = (k, s, r) => (D[k] = D[k] || []).push(`M${(s.px - r).toFixed(0)} ${(s.py - r).toFixed(0)}h${2 * r}v${2 * r}h${-2 * r}z`);
+    DATA.sys.forEach(s => {
+      const c = secClass(s), hot = camp.has(s.id) || hunt.has(s.id);
+      const faded = IGN.has(s.id) || (dim && !(dist[s.id] <= 2)) || (c === "h" && !hot);
+      add(c + (faded ? "f" : ""), s, c === "h" ? 11 : 15);
+      if (camp.has(s.id)) add("camp", s, 30); else if (hunt.has(s.id)) add("hunt", s, 26);
+    });
+    for (const k in D) {
+      const c = k[0], f = k.length === 2;
+      if (k === "camp" || k === "hunt") el("path", { d: D[k].join(""), fill: "none", stroke: k === "camp" ? "#ff3b3b" : "#ffb020", "stroke-width": 9 }, g);
+      else el("path", { d: D[k].join(""), fill: secColours ? "#59626c" : NODE[c][1], "fill-opacity": f ? .3 : .95 }, g);
+    }
+    built = "far"; drawEdges();
+  } else {
+    const R = viewRect(.6); built = R; drawEdges(R);
+    DATA.sys.forEach(s => {
+      if (s.px < R.x0 || s.px > R.x1 || s.py < R.y0 || s.py > R.y1) return;
+      const grp = el("g", { class: "nd", transform: `translate(${s.px},${s.py})` }, g);
+      const w = Math.max(54, s.n.length * 6.4 + 14), h = 28;
+      const isC = camp.has(s.id), isH = hunt.has(s.id), c = secClass(s), hot = isC || isH;
+      if (isC) el("rect", { x: -w / 2 - 7, y: -h / 2 - 7, width: w + 14, height: h + 14, rx: 11, fill: "none", stroke: "#ff3b3b", "stroke-width": 4 }, grp);
+      if (isH) el("rect", { x: -w / 2 - 5, y: -h / 2 - 5, width: w + 10, height: h + 10, rx: 10, fill: "none", stroke: "#ffb020", "stroke-width": 4 }, grp);
+      el("rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: 7, fill: NODE[c][0], stroke: secColours ? secCol(s.s) : NODE[c][1], "stroke-width": c !== "h" || secColours ? 1.6 : 1 }, grp);
+      const t = el("text", { y: -1, "text-anchor": "middle", "font-size": 11, "font-weight": hot ? 800 : 600, fill: hot ? "#fff" : c === "n" ? "#e6b8bb" : "#b9c1ca" }, grp); t.textContent = s.n;
+      const t2 = el("text", { y: 10.5, "text-anchor": "middle", "font-size": 8, fill: "#7f8a96" }, grp); t2.textContent = dispSec(s.s).toFixed(1) + " · " + s.c;
+      if (dim && !(dist[s.id] <= 2)) grp.setAttribute("opacity", .22);
+      else if (c === "h" && !hot) grp.setAttribute("opacity", .38);
+      if (IGN.has(s.id)) grp.setAttribute("opacity", .28);
+      if (window.radarNode) radarNode(s, grp, w, h);
+      grp.addEventListener("click", e => { e.stopPropagation(); select(s.id, false); });
+      nodeEls[s.id] = grp;
+    });
+  }
+  if (flashId) flash(flashId);
+}
+// after a pan/zoom: rebuild only when we switched far<->near or moved outside the built area
+let recullT = null;
+function recullSoon() { clearTimeout(recullT); recullT = setTimeout(() => {
+  const far = view.k < NEAR;
+  if (far !== (built === "far")) return drawNodes();
+  if (!far && built) { const r = viewRect(0); if (r.x0 < built.x0 || r.y0 < built.y0 || r.x1 > built.x1 || r.y1 > built.y1) drawNodes(); }
+}, 90); }
+// zoomed out: a click picks the nearest system
+$("svg").addEventListener("click", e => {
+  if (view.k >= NEAR || e.target.closest(".nd") || panMoved) return;
+  const r = svg.getBoundingClientRect(), mx = (e.clientX - r.left - view.x) / view.k, my = (e.clientY - r.top - view.y) / view.k;
+  let best = null, bd = 80 / Math.max(view.k * 4, .25); DATA.sys.forEach(s => { const d = Math.hypot(s.px - mx, s.py - my); if (d < bd) { bd = d; best = s; } });
+  if (best) select(best.id, true);
+});
 
 function renderEyes() { return;
   const rows = [...eyes.entries()].sort((a, b) => b[1].n1.length - a[1].n1.length || b[1].n2 - a[1].n2 || S[a[0]].n.localeCompare(S[b[0]].n));
@@ -333,9 +372,7 @@ function select(id, center) {
   $("info").innerHTML = `<b>${s.n}</b> ${role}${window.toggleIgnore ? ` <button id="ignBtn" style="float:right">${ign ? "Un-ignore" : "Ignore"}</button>` : ""}<br><span class="sub">${s.r} › ${s.c} · sec ${dispSec(s.s).toFixed(1)} (${s.s.toFixed(2)})<br>${dist[id] === undefined ? "no target in reach" : dist[id] === 0 ? "target" : dist[id] + " jump(s) to nearest target"}</span><div style="margin-top:6px">${nb}${ex ? "<br>" + ex : ""}</div>`;
   $("info").querySelectorAll("a").forEach(a => a.onclick = ev => { ev.preventDefault(); select(+a.dataset.id, true); });
   if ($("ignBtn")) $("ignBtn").onclick = () => { window.toggleIgnore(id); setTimeout(() => select(id, false), 400); };
-  Object.values(nodeEls).forEach(g => g.removeAttribute("filter"));
-  if (nodeEls[id]) { const r = nodeEls[id].querySelector("rect:last-of-type"); }
-  flash(id);
+  flashId = id; flash(id);
   if (center) centerOn(s);
 }
 let flashEl = null;
@@ -348,7 +385,7 @@ function flash(id) {
 // pan / zoom
 let view = { x: 0, y: 0, k: .55 };
 const vp = $("vp"), svg = $("svg");
-function applyView() { vp.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`); svg.classList.toggle("far", view.k < .28); }
+function applyView() { vp.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`); svg.classList.toggle("far", view.k < NEAR); recullSoon(); }
 function zoomAt(f, cx, cy) { const k = Math.min(4, Math.max(.02, view.k * f)); view.x = cx - (cx - view.x) * k / view.k; view.y = cy - (cy - view.y) * k / view.k; view.k = k; applyView(); }
 svg.addEventListener("wheel", e => { e.preventDefault(); const r = svg.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * .0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
 function fit() {
@@ -365,10 +402,10 @@ $("legX").onclick = () => $("legPop").classList.remove("on");
 $("legPop").addEventListener("pointerdown", e => e.stopPropagation());
 document.addEventListener("keydown", e => { if (e.key === "Escape") $("legPop").classList.remove("on"); });
 
-let pan = null;
-svg.addEventListener("pointerdown", e => { if (e.target.closest(".nd")) return; pan = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }; $("map").classList.add("drag"); svg.setPointerCapture(e.pointerId); });
+let pan = null, panMoved = false;
+svg.addEventListener("pointerdown", e => { if (e.target.closest(".nd")) return; pan = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }; panMoved = false; $("map").classList.add("drag"); svg.setPointerCapture(e.pointerId); });
 svg.addEventListener("pointermove", e => {
-  if (pan) { view.x = pan.vx + e.clientX - pan.x; view.y = pan.vy + e.clientY - pan.y; applyView(); }
+  if (pan) { if (Math.hypot(e.clientX - pan.x, e.clientY - pan.y) > 4) panMoved = true; view.x = pan.vx + e.clientX - pan.x; view.y = pan.vy + e.clientY - pan.y; applyView(); }
 });
 svg.addEventListener("pointerup", e => {
   if (pan) { pan = null; $("map").classList.remove("drag"); }
@@ -382,7 +419,7 @@ $("search").addEventListener("keydown", e => {
 });
 $("search").addEventListener("input", e => e.target.style.borderColor = "");
 
-function renderAll() { computeTargets(); drawRegions(); drawEdges(); drawStubs(); drawNodes(); renderEyes(); }
+function renderAll() { computeTargets(); drawRegions(); drawStubs(); drawNodes(); renderEyes(); }
 $("apply").onclick = renderAll;
 $("defaults").onclick = () => { $("tCamp").value = DEF_CAMP; renderAll(); };
 ["cDim"].forEach(id => $(id).onchange = () => { drawNodes(); });
