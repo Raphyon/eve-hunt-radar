@@ -176,7 +176,7 @@ function watchSet() {
 let lastBeep = 0;
 function maybeAlert(ev) {
   // v10 rules:  <= beep radius of the character you fly: any PvP (klaxon) / watched ship (beep)
-  //             near camp/hunt targets (within watch range): watched ships only (beep)
+  //             near watched systems AND within watch-range jumps of the character you fly: watched ships only (beep)
   //             everything else in watch range: silent (feed + map)
   if (!status.live) return;
   if (ignored().has(ev.sys)) return;
@@ -185,12 +185,14 @@ function maybeAlert(ev) {
   const watched = !!(a.length || v);
   const me = activeChar(), mySys = me && chars.get(me).sys;
   const R = +settings.nearRange || 5;
-  const meDist = SYS[mySys] ? (bfs(mySys, Math.max(R, 40)).get(ev.sys) ?? null) : null;
+  const WJ = +settings.watchJumps || 20;
+  const meDist = SYS[mySys] ? (bfs(mySys, Math.max(R, WJ, 40)).get(ev.sys) ?? null) : null;
   const nearMe = meDist !== null && meDist <= R;
   const T = parseTargets(settings.watched);
   let tDist = 99, tName = null;
   if (watched && T.size) { const d = bfs(ev.sys, +settings.range || 3); T.forEach(t => { if (d.has(t) && d.get(t) < tDist) { tDist = d.get(t); tName = SYS[t].n; } }); }
-  const nearTarget = watched && tName !== null;
+  // watched-system pings follow the character you're flying: out hunting elsewhere, home camps stay quiet
+  const nearTarget = watched && tName !== null && (!SYS[mySys] || (meDist !== null && meDist <= WJ));
   if (!(nearMe && (watched || settings.near)) && !nearTarget) return;
   const what = a.length ? [...new Set(a.map(p => p.shipName))].sort().join(", ")
     : v ? ev.victim.shipName + " died"
