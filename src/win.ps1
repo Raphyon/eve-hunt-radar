@@ -1,7 +1,6 @@
 # Hunt Radar Windows helper — runs hidden, talks JSON lines over stdin/stdout.
 # Commands:  WIN                -> {"titles":[...EVE character names...],"fg":"name or null"}
 #            OCR x y w h path   -> {"lines":[...]}  (screenshot of that screen rect, read with Windows OCR)
-#            KEYS               -> {"ok":true}      (Ctrl+A, Ctrl+C into the window in front — opt-in feature)
 #            OCRL x y w h path  -> {"lines":[{"t":text,"y":center-y in the rect}]}  (one Local row lookup)
 #            HOOK ON|OFF        -> watch for MIDDLE-clicks only (for the pilot lookup); WIN then also returns "clicks"
 # Reads window titles only (like EVE-O Preview). Never reads or writes EVE's memory.
@@ -59,11 +58,6 @@ public static class HR {
     return list.ToArray();
   }
   public static string Foreground() { var t = Title(GetForegroundWindow()); return t.StartsWith("EVE - ") ? t.Substring(6).Trim() : null; }
-  public static void CopyAll() {
-    const uint UP = 2;
-    foreach (int vk in new[] { 0x10, 0x11, 0x12 }) if ((GetAsyncKeyState(vk) & 0x8000) != 0) keybd_event((byte)vk, 0, UP, UIntPtr.Zero);
-    int[,] seq = { { 0x11, 0 }, { 0x41, 0 }, { 0x41, 2 }, { 0x43, 0 }, { 0x43, 2 }, { 0x11, 2 } };
-    for (int i = 0; i < 6; i++) { keybd_event((byte)seq[i, 0], 0, (uint)seq[i, 1], UIntPtr.Zero); System.Threading.Thread.Sleep(30); }
   }
 }
 '@
@@ -126,11 +120,6 @@ while ($true) {
   try {
     switch ($p[0]) {
       'WIN' { Out-Json @{ titles = @([HR]::EveTitles()); fg = [HR]::Foreground(); clicks = @([MidClick]::Drain()) } }
-      'KEYS' { [HR]::CopyAll(); Out-Json @{ ok = $true } }
-      'OCR' {
-        $r = Read-Rect ([int]$p[1]) ([int]$p[2]) ([int]$p[3]) ([int]$p[4]) ($p[5..($p.Length-1)] -join ' ')
-        Out-Json @{ lines = @($r | ForEach-Object { $_.t }) }
-      }
       'OCRL' {
         $r = Read-Rect ([int]$p[1]) ([int]$p[2]) ([int]$p[3]) ([int]$p[4]) ($p[5..($p.Length-1)] -join ' ')
         Out-Json @{ lines = @($r) }

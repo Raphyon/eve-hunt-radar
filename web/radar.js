@@ -223,14 +223,8 @@ $("ovTest").onclick = () => { const AC = new AudioContext(); const t0 = AC.curre
 $("ovOp").oninput = () => { $("opV").textContent = Math.round($("ovOp").value * 100) + "%"; post("/settings", { overlay: { opacity: +$("ovOp").value } }); };
 $("ovJ").onchange = () => post("/settings", { overlay: { mapJumps: +$("ovJ").value } });
 $("sndOn").onchange = () => post("/settings", { sound: $("sndOn").checked });
-$("snOn").onchange = () => post("/settings", { snapOn: $("snOn").checked });
 $("luOn").onchange = () => post("/settings", { lookupOn: $("luOn").checked });
-$("snMode").onchange = () => { post("/settings", { snapMode: $("snMode").value }); snHelp(); };
 $("snPick").onclick = () => post("/cmd", { cmd: "pick" });
-$("snTest").onclick = () => post("/cmd", { cmd: "snap" });
-function snHelp() { $("snHelp").textContent = $("snMode").value === "Screenshot"
-  ? "Screenshots the box you mark over Local's member list and reads it with Windows OCR. Nothing is sent to EVE. Only visible rows; small fonts can misread."
-  : "Sends Ctrl+A, Ctrl+C to the EVE window in front (click into Local first). Gets everyone, but sends keystrokes into the client — grey area under CCP's rules, your own risk."; }
 // hotkey capture boxes -> Electron accelerator strings
 const KEYMAP = { " ": "Space", "ArrowUp": "Up", "ArrowDown": "Down", "ArrowLeft": "Left", "ArrowRight": "Right", "ScrollLock": "Scrolllock", "Pause": "Pause", "Insert": "Insert", "Delete": "Delete", "Home": "Home", "End": "End", "PageUp": "PageUp", "PageDown": "PageDown", "Escape": "Escape" };
 function accel(e) {
@@ -240,7 +234,7 @@ function accel(e) {
     || (/^F\d+$/.test(e.key) ? e.key : null) || (e.key.length === 1 ? e.key.toUpperCase() : null);
   return k ? [...mods, k].join("+") : null;
 }
-[["kEdit", "keyEdit"], ["kMode", "keyMode"], ["kSnap", "keySnap"]].forEach(([id, key]) => {
+[["kEdit", "keyEdit"], ["kMode", "keyMode"]].forEach(([id, key]) => {
   const inp = $(id); inp.readOnly = true;
   inp.addEventListener("keydown", e => { e.preventDefault(); const a = accel(e); if (!a) return; inp.value = a; post("/settings", { [key]: a }); });
 });
@@ -273,13 +267,13 @@ let uiLoaded = false;
 function applyUi(d) {
   RA.ui = d.ui; const st = d.settings;
   $("ovEdit").textContent = d.ui.edit ? "Lock overlay 🔒" : "Edit / move overlay";
-  const ks = d.ui.keys || {}; $("kEditS").textContent = ks.edit === "ok" ? "✓" : ks.edit || ""; $("kModeS").textContent = ks.mode === "ok" ? "✓" : ks.mode || ""; $("kSnapS").textContent = ks.snap === "ok" ? "✓" : ks.snap || "";
+  const ks = d.ui.keys || {}; $("kEditS").textContent = ks.edit === "ok" ? "✓" : ks.edit || ""; $("kModeS").textContent = ks.mode === "ok" ? "✓" : ks.mode || "";
   const sn = d.snap; $("snMsg").textContent = sn.msg ? sn.msg + " · " + agoS(sn.t) + " ago" : (st.localArea ? "Local area set." : "No Local area marked yet.");
   if (uiLoaded) return; uiLoaded = true;
   $("ovOp").value = st.overlay.opacity; $("opV").textContent = Math.round(st.overlay.opacity * 100) + "%"; $("ovJ").value = String(st.overlay.mapJumps || 4);
-  $("sndOn").checked = st.sound !== false; $("luOn").checked = st.lookupOn !== false; $("snOn").checked = !!st.snapOn; $("snMode").value = st.snapMode || "Screenshot";
+  $("sndOn").checked = st.sound !== false; $("luOn").checked = st.lookupOn !== false;
   $("esiCid").value = st.esiClientId || ""; $("autoSt").checked = !!st.autostart;
-  $("kEdit").value = st.keyEdit || ""; $("kMode").value = st.keyMode || ""; $("kSnap").value = st.keySnap || ""; snHelp();
+  $("kEdit").value = st.keyEdit || ""; $("kMode").value = st.keyMode || "";
 }
 
 async function poll() {
