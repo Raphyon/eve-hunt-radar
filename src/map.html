@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hunt Radar</title>
+<title>Hunt radar map</title>
 <style>
 :root{--bg:#0d1014;--panel:#151a20;--line:#2a313a;--txt:#d8dee6;--mut:#7f8a96;--camp:#ff3b3b;--hunt:#ffb020;--eye:#39c6ff}
 *{box-sizing:border-box}
@@ -12,6 +12,9 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:13px/1
 #map{flex:1;position:relative;cursor:grab}
 #map.drag{cursor:grabbing}
 svg{width:100%;height:100%;display:block;user-select:none}
+#svg.far .nd text,#svg.far #gStubs{display:none}
+#svg:not(.far) .rgBig{display:none}
+#svg.far .rgSmall{display:none}
 #side{width:360px;background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:12px 14px}
 h1{font-size:15px;margin:0 0 2px}
 h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:16px 0 6px}
@@ -165,8 +168,8 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
    <div id="feed"></div>
   </div>
 
-  <h1>Genesis · Kor-Azor · Kador</h1>
-  <div class="sub">+ Armi pocket (Domain), 3 jumps off Fensi. Gate data: EVE SDE, Oct 2026. Security: ESI, full precision. Drag to pan, scroll to zoom, click a system for details.</div>
+  <h1>New Eden</h1>
+  <div class="sub">CCP's in-game 2D map layout (SDE build 3707965), all known space. Highsec is drawn dimmed; its kills are never tracked. Drag to pan, scroll to zoom (zoom in for names), Find system to jump.</div>
 
 
   <h2>Targets</h2>
@@ -246,12 +249,12 @@ function computeTargets() {
 function drawRegions() {
   const g = $("gRegions"); g.innerHTML = "";
   const R = {}; DATA.sys.forEach(s => { (R[s.r] = R[s.r] || []).push(s); });
-  const tint = { Genesis: "#8a939d", "Kor-Azor": "#8a939d", Kador: "#8a939d", Domain: "#8a939d" };
   for (const r in R) {
-    const xs = R[r].map(s => s.px), ys = R[r].map(s => s.py);
-    const x0 = Math.min(...xs) - 60, y0 = Math.min(...ys) - 50, x1 = Math.max(...xs) + 60, y1 = Math.max(...ys) + 30;
-    el("rect", { x: x0, y: y0, width: x1 - x0, height: y1 - y0, rx: 18, fill: tint[r], "fill-opacity": .03, stroke: tint[r], "stroke-opacity": .25, "stroke-dasharray": "6 6" }, g);
-    const t = el("text", { x: x0 + 14, y: y0 + 26, fill: tint[r], "fill-opacity": .45, "font-size": 26, "font-weight": 700 }, g); t.textContent = r === "Domain" ? "Domain (Armi pocket)" : r;
+    const L = R[r], cx = L.reduce((t, s) => t + s.px, 0) / L.length, cy = L.reduce((t, s) => t + s.py, 0) / L.length;
+    const hs = L.every(s => dispSec(s.s) >= 0.5);
+    const big = el("text", { class: "rgBig", x: cx, y: cy, "text-anchor": "middle", "dominant-baseline": "middle", fill: hs ? "#6b7580" : "#c9d1d9", "fill-opacity": hs ? .5 : .75, "font-size": 170, "font-weight": 700, stroke: "#0d1014", "stroke-width": 24, "paint-order": "stroke" }, g); big.textContent = r;
+    const top = L.reduce((a, s) => s.py < a.py ? s : a, L[0]);
+    const sm = el("text", { class: "rgSmall", x: cx, y: top.py - 60, "text-anchor": "middle", fill: "#8a939d", "fill-opacity": .55, "font-size": 34, "font-weight": 700 }, g); sm.textContent = r;
   }
 }
 
@@ -306,6 +309,7 @@ function drawNodes() {
     const t = el("text", { y: -1, "text-anchor": "middle", "font-size": 11, "font-weight": hot ? 800 : 600, fill: hot ? "#fff" : "#b9c1ca" }, grp); t.textContent = s.n;
     const t2 = el("text", { y: 10.5, "text-anchor": "middle", "font-size": 8, fill: "#7f8a96" }, grp); t2.textContent = dispSec(s.s).toFixed(1) + " · " + s.c;
     if (dim && !(dist[s.id] <= 2)) grp.setAttribute("opacity", .22);
+    else if (!low && !hot) grp.setAttribute("opacity", .38);
     if (window.IGNORED && window.IGNORED.has(s.id)) grp.setAttribute("opacity", .28);
     if (window.radarNode) radarNode(s, grp, w, h);
     grp.addEventListener("click", e => { e.stopPropagation(); select(s.id, false); });
@@ -344,15 +348,15 @@ function flash(id) {
 // pan / zoom
 let view = { x: 0, y: 0, k: .55 };
 const vp = $("vp"), svg = $("svg");
-function applyView() { vp.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`); }
-function zoomAt(f, cx, cy) { const k = Math.min(4, Math.max(.12, view.k * f)); view.x = cx - (cx - view.x) * k / view.k; view.y = cy - (cy - view.y) * k / view.k; view.k = k; applyView(); }
+function applyView() { vp.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`); svg.classList.toggle("far", view.k < .28); }
+function zoomAt(f, cx, cy) { const k = Math.min(4, Math.max(.02, view.k * f)); view.x = cx - (cx - view.x) * k / view.k; view.y = cy - (cy - view.y) * k / view.k; view.k = k; applyView(); }
 svg.addEventListener("wheel", e => { e.preventDefault(); const r = svg.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * .0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
 function fit() {
   const r = svg.getBoundingClientRect(); const xs = DATA.sys.map(s => s.px), ys = DATA.sys.map(s => s.py);
   const x0 = Math.min(...xs) - 120, x1 = Math.max(...xs) + 120, y0 = Math.min(...ys) - 80, y1 = Math.max(...ys) + 80;
   view.k = Math.min(r.width / (x1 - x0), r.height / (y1 - y0)); view.x = -x0 * view.k + (r.width - (x1 - x0) * view.k) / 2; view.y = -y0 * view.k + (r.height - (y1 - y0) * view.k) / 2; applyView();
 }
-function centerOn(s) { const r = svg.getBoundingClientRect(); if (view.k < .9) view.k = .9; view.x = r.width / 2 - s.px * view.k; view.y = r.height / 2 - s.py * view.k; applyView(); }
+function centerOn(s, kMin = .9) { const r = svg.getBoundingClientRect(); if (view.k < kMin) view.k = kMin; view.x = r.width / 2 - s.px * view.k; view.y = r.height / 2 - s.py * view.k; applyView(); }
 $("zi").onclick = () => { const r = svg.getBoundingClientRect(); zoomAt(1.3, r.width / 2, r.height / 2); };
 $("zo").onclick = () => { const r = svg.getBoundingClientRect(); zoomAt(1 / 1.3, r.width / 2, r.height / 2); };
 $("fit").onclick = fit;
@@ -680,7 +684,12 @@ async function poll() {
     $("wCnt").textContent = `${d.watchCount} systems currently watched` + (d.watchCount ? "" : " — log in and jump once so the radar knows where you are");
     RA.ws = { g: new Set((d.watch || {}).g || []), t: new Set((d.watch || {}).t || []) };
     applyUi(d); renderApp(d); renderJump(d); RA.jump = d.jump || []; RA.jumpReach = d.jumpReach || []; RA.si = d.sysInfo || {}; window.IGNORED = new Set(d.ignoredIds || []);
-    renderFeed(); renderChars(); renderLocal(); renderBest(); drawPulses(); drawHeat(); drawNodes();
+    renderFeed(); renderChars(); renderLocal(); renderBest(); drawPulses(); drawHeat();
+    // nodes are 5k+ elements: only rebuild when what they show changed (Local counts, ignore list)
+    const sig = JSON.stringify([RA.lc, [...window.IGNORED].sort(), Math.floor(Date.now() / 300000)]);
+    if (sig !== RA.nodeSig) { RA.nodeSig = sig; drawNodes(); }
+    // first load: start zoomed on the character you're flying
+    if (!RA.centered) { const c = RA.chars.find(c => c.active && S[c.sys]) || RA.chars.find(c => c.running && S[c.sys]); if (c) { RA.centered = true; centerOn(S[c.sys], .8); } }
   } catch (e) { $("rStatus").innerHTML = `<span style="color:#ff6b6b">Lost contact with the radar — is its window still open?</span>`; }
 }
 window.addEventListener("focus", () => document.title = "Hunt radar");
