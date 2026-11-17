@@ -326,6 +326,7 @@ function looksLikeLocal(text) {
   return [...new Set(lines)];
 }
 async function analyseLocal(pilotNames, source = "paste") {
+  if (source === "paste") { local.pasted = pilotNames.slice(); local.pastedAt = now(); }
   const sid = primarySys();
   Object.assign(local, { sys: sid, t: now(), count: pilotNames.length, resolving: true, source, pilots: pilotNames.map(n => ({ name: n })) });
   if (sid) localCounts[sid] = [pilotNames.length, now()];
@@ -522,8 +523,69 @@ async function onMiddleClick(x, y) {
   const cy = y - top;
   lines = lines.map(l => ({ t: cleanOcrLine(String(l.t || "")), dy: Math.abs((+l.y || 0) - cy) })).filter(l => l.t).sort((p, q) => p.dy - q.dy);
   if (!lines.length) return showCard({ state: "error", msg: "no name under the cursor", at: [x, y] });
-  await lookupPilot(lines[0].t, [x, y], seq);
+  showCard({ state: "loading", name: lines[0].t, at: [x, y] });
+  const m = await resolveOcrName(lines[0].t);
+  if (seq !== card.seq) return;
+  if (!m) return showCard({ state: "error", msg: `read "${lines[0].t}" but no pilot matches. Copy Local once (Ctrl+A, Ctrl+C) and the radar can match against it.`, at: [x, y] });
+  await lookupPilot(m.name, [x, y], seq, m.how === "exact" ? null : lines[0].t);
 }
+// ---- OCR name correction
+// EVE's small font makes OCR confuse l/I/1, O/0, rn/m etc. Instead of trusting the raw read:
+//  1) match against names we already know are real (last Local paste/snapshot, pilots on recent kills),
+//     using an edit distance where look-alike letters are almost free;
+//  2) otherwise ask ESI which look-alike spellings exist (one batched /universe/ids call, no login).
+const CONF = [["l", "I"], ["l", "1"], ["I", "1"], ["i", "l"], ["i", "j"], ["O", "0"], ["o", "0"], ["O", "Q"], ["O", "D"], ["S", "5"], ["s", "5"], ["B", "8"],
+  ["Z", "2"], ["z", "2"], ["g", "q"], ["g", "9"], ["G", "6"], ["e", "c"], ["a", "o"], ["u", "v"], ["n", "h"], ["t", "f"], ["T", "7"], ["A", "4"], ["E", "F"], ["c", "o"]];
+const CONF_SET = new Set(CONF.flatMap(([a, b]) => [a + b, b + a]));
+const MULTI = [["rn", "m"], ["vv", "w"], ["cl", "d"], ["li", "h"], ["ri", "n"], ["nn", "m"], ["iI", "il"]];
+function subCost(a, b) { if (a === b) return 0; if (a.toLowerCase() === b.toLowerCase()) return 0.1; return CONF_SET.has(a + b) ? 0.25 : 1; }
+function ocrDist(a, b) {   // weighted Damerau-ish edit distance with look-alike + multi-char swaps
+  const n = a.length, m = b.length, D = Array.from({ length: n + 1 }, () => new Float64Array(m + 1));
+  for (let i = 0; i <= n; i++) D[i][0] = i; for (let j = 0; j <= m; j++) D[0][j] = j;
+  for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) {
+    let v = Math.min(D[i - 1][j] + (a[i - 1] === " " || a[i - 1] === "." ? 0.4 : 1), D[i][j - 1] + (b[j - 1] === " " ? 0.4 : 1), D[i - 1][j - 1] + subCost(a[i - 1], b[j - 1]));
+    for (const [x, y] of MULTI) for (const [p, q] of [[x, y], [y, x]])
+      if (i >= p.length && j >= q.length && a.slice(i - p.length, i) === p && b.slice(j - q.length, j) === q) v = Math.min(v, D[i - p.length][j - q.length] + 0.25);
+    D[i][j] = v;
+  }
+  return D[n][m];
+}
+function knownNames() {
+  // Ctrl+C on Local is exact text from EVE, so pasted names are the best reference (kept for 2 h)
+  const out = new Set(local.pasted && now() - local.pastedAt < 7200 ? local.pasted : []);
+  local.pilots.filter(p => p.id).forEach(p => out.add(p.name));
+  for (const e of events.slice(-300)) for (const p of [e.victim, ...e.attackers]) if (p.charName) out.add(p.charName);
+  return [...out];
+}
+function variants(t, cap = 400) {   // look-alike spellings of an OCR read, original first
+  const subs = new Map(); CONF.forEach(([a, b]) => { (subs.get(a) || subs.set(a, []).get(a)).push(b); (subs.get(b) || subs.set(b, []).get(b)).push(a); });
+  let out = new Set([t]);
+  for (const [x, y] of MULTI) for (const v of [...out]) { if (v.includes(x)) out.add(v.split(x).join(y)); if (v.includes(y)) out.add(v.split(y).join(x)); }
+  for (let i = 0; i < t.length && out.size < cap; i++) {
+    const alts = subs.get(t[i]); if (!alts) continue;
+    for (const v of [...out]) { for (const r of alts) { if (out.size >= cap) break; if (v[i] === t[i]) out.add(v.slice(0, i) + r + v.slice(i + 1)); } }
+  }
+  return [...out].filter(v => NAME_RE.test(v));
+}
+async function resolveOcrName(t) {
+  // 1) known names
+  let best = null;
+  for (const n of knownNames()) { const d = ocrDist(t, n) / Math.max(n.length, 3); if (!best || d < best.d) best = { name: n, d }; }
+  if (best && best.d === 0) return { name: best.name, how: "exact" };
+  if (best && best.d <= 0.22) return { name: best.name, how: "known" };
+  // 2) ESI: which look-alike spellings are real characters?
+  const vs = variants(t);
+  for (let k = 0; k < vs.length; k += 250) {
+    const [c, b] = await get(`${ESI}/universe/ids/`, { body: vs.slice(k, k + 250) });
+    const found = c === 200 && b && b.characters || [];
+    if (found.length) {
+      found.sort((p, q) => ocrDist(t, p.name) - ocrDist(t, q.name));
+      return { name: found[0].name, how: found[0].name === t ? "exact" : "esi" };
+    }
+  }
+  return null;
+}
+
 function pickTop(list, n = 3) {
   // zKill topLists entries: pull a readable name + count from whatever fields are present
   return (list || []).slice(0, n).map(v => {
@@ -531,7 +593,7 @@ function pickTop(list, n = 3) {
     return { name: v[nameKey] || "?", kills: v.kills ?? v.count ?? null };
   });
 }
-async function lookupPilot(name, at, seq = ++card.seq) {
+async function lookupPilot(name, at, seq = ++card.seq, readAs = null) {
   showCard({ state: "loading", name, at });
   const [c1, b1] = await get(`${ESI}/universe/ids/`, { body: [name] });
   const ch = c1 === 200 && b1 && (b1.characters || [])[0];
@@ -550,7 +612,7 @@ async function lookupPilot(name, at, seq = ++card.seq) {
     ships: pickTop(listBy(/ship/i)), systems: pickTop(listBy(/system/i)) };
   zstats.set(ch.id, { danger: st.danger, gang: st.gang, kills: st.kills, losses: st.losses });
   const sn = (seen.get(ch.id) || []).slice(0, 3).map(x => ({ role: x.role, ship: x.ship, sys: SYS[x.sys] ? SYS[x.sys].n : x.sys, t: x.t, watched: !!GROUP_CLASS[x.group] }));
-  showCard({ state: "ok", at, id: ch.id, name: ch.name, corp: names.get(a.corporation_id), alli: names.get(a.alliance_id), st, seen: sn, zk: c3 === 200,
+  showCard({ state: "ok", at, readAs, id: ch.id, name: ch.name, corp: names.get(a.corporation_id), alli: names.get(a.alliance_id), st, seen: sn, zk: c3 === 200,
     link: `https://zkillboard.com/character/${ch.id}/` });
 }
 function showCard(d) {

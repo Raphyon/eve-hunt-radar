@@ -45,7 +45,7 @@ function render(d) {
       ${(d.seen || []).length ? `<h4>Seen here recently</h4>` + d.seen.map(z => `<div class="ln ${z.watched && z.role === "attacker" ? "pnk" : "amb"}">${z.role} in ${esc(z.ship)} @ ${esc(z.sys)} · ${ago(z.t)} ago</div>`).join("") : ""}
       ${(s.ships || []).length ? `<h4>Top ships</h4><div class="ln">${s.ships.map(z => esc(z.name) + (z.kills != null ? ` <span class="mut">${z.kills}</span>` : "")).join(" · ")}</div>` : ""}
       ${(s.systems || []).length ? `<h4>Top systems</h4><div class="ln">${s.systems.map(z => esc(z.name) + (z.kills != null ? ` <span class="mut">${z.kills}</span>` : "")).join(" · ")}</div>` : ""}
-      <div class="ft"><span class="mut">${d.zk ? "zKillboard stats" : "zKill unavailable"}</span><a href="${esc(d.link)}" target="_blank">open zKill ↗</a></div>`;
+      <div class="ft"><span class="mut">${d.readAs ? `read "${esc(d.readAs)}" → corrected` : d.zk ? "zKillboard stats" : "zKill unavailable"}</span><a href="${esc(d.link)}" target="_blank">open zKill ↗</a></div>`;
   }
   const xb = document.getElementById("x"); if (xb) xb.addEventListener("mousedown", e => { e.preventDefault(); close(); });
 }
