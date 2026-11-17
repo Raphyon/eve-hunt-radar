@@ -51,7 +51,7 @@ const DEFAULTS = {
   watched: "Gonditsa, Ami, Fensi, Vecamia, Ahbazon, Beke, Armi, Kihkounad", ignore: "",
   camp: null, hunt: null,          // pre-v10, merged into "watched" on load
   classes: null,                 // pre-v10 fixed ship classes, migrated into watchlists on load
-  watchlists: null,              // [{ name, on, groups: [groupID], types: [typeID] }]
+  watchlists: null,              // [{ name, on, groups, types (watched: feed/map), pgroups, ptypes (pinged: beep) }]
   victim: true, range: 3, sound: true, near: true, nearRange: 5, chatlogs: "",
   // v10: watch range (kills outside are dropped before any lookup) and space bands
   watchJumpsOn: true, watchJumps: 20, watchLyOn: true, watchLy: 16, space: { low: true, null: true, poch: true }, beepGap: 10,
@@ -115,17 +115,22 @@ async function shipInfo(tid) {
 // ---- ship watchlists: a ship is watched if its type, or its whole group, is in any enabled list
 if (!Array.isArray(settings.watchlists)) {
   const cls = settings.classes || {};
-  settings.watchlists = [{ name: "Default", on: true, types: [],
-    groups: Object.keys(GROUP_CLASS).filter(g => cls[GROUP_CLASS[g]] !== false).map(Number) }];
+  settings.watchlists = [{ name: "Default", on: true, types: [], groups: [], ptypes: [],
+    pgroups: Object.keys(GROUP_CLASS).filter(g => cls[GROUP_CLASS[g]] !== false).map(Number) }];
 }
+// beta.4 lists had only "groups/types" and everything in them beeped: keep that behaviour as "pinged"
+settings.watchlists.forEach(l => { if (!l.pgroups && !l.ptypes) { l.pgroups = l.groups || []; l.ptypes = l.types || []; l.groups = []; l.types = []; } });
 let wsCache = { key: null, g: new Set(), t: new Set() };
 function watchSets() {
   const key = JSON.stringify(settings.watchlists); if (key === wsCache.key) return wsCache;
-  const g = new Set(), t = new Set();
-  (settings.watchlists || []).filter(l => l.on !== false).forEach(l => { (l.groups || []).forEach(x => g.add(+x)); (l.types || []).forEach(x => t.add(+x)); });
-  return wsCache = { key, g, t };
+  const g = new Set(), t = new Set(), pg = new Set(), pt = new Set();
+  (settings.watchlists || []).filter(l => l.on !== false).forEach(l => {
+    (l.groups || []).forEach(x => g.add(+x)); (l.types || []).forEach(x => t.add(+x));
+    (l.pgroups || []).forEach(x => { pg.add(+x); g.add(+x); }); (l.ptypes || []).forEach(x => { pt.add(+x); t.add(+x); }); });
+  return wsCache = { key, g, t, pg, pt };
 }
-const isWatched = p => { const W = watchSets(); return !!p && (W.t.has(+p.ship || +p.type) || W.g.has(+p.group)); };
+const isWatched = p => { const W = watchSets(); return !!p && (W.t.has(+p.ship || +p.type) || W.g.has(+p.group)); };   // ✓ or ✗
+const isPinged = p => { const W = watchSets(); return !!p && (W.pt.has(+p.ship || +p.type) || W.pg.has(+p.group)); };   // ✗ only
 
 // ------------------------------------------------------------- targets / alerts
 function parseTargets(txt) {
@@ -171,8 +176,8 @@ function maybeAlert(ev) {
   //             everything else in watch range: silent (feed + map)
   if (!status.live) return;
   if (ignored().has(ev.sys)) return;
-  const a = ev.attackers.filter(isWatched);
-  const v = isWatched(ev.victim) && settings.victim;
+  const a = ev.attackers.filter(isPinged);                // only ✗ (pinged) ships beep; ✓ ships just show in feed/map
+  const v = isPinged(ev.victim) && settings.victim;
   const watched = !!(a.length || v);
   const me = activeChar(), mySys = me && chars.get(me).sys;
   const R = +settings.nearRange || 5;
@@ -842,7 +847,7 @@ function statePayload(q) {
   return {
     version: VERSION, status, heat, heatAt, events: events.filter(e => e.n > since), alerts: alerts.filter(a => a.n > asince),
     chars: charView(), local: localView(), best: bestNearby(), localCounts, settings, chatlogs: chatlog,
-    jump: jumpView().map(j => Object.assign({}, j, { inRange: undefined, inRangeCount: j.inRange.length })), jumpToons: jumpToonsView(), jumpClasses: JUMP, ignoredIds: [...ignored()], watch: { g: [...watchSets().g], t: [...watchSets().t] },
+    jump: jumpView().map(j => Object.assign({}, j, { inRange: undefined, inRangeCount: j.inRange.length })), jumpToons: jumpToonsView(), jumpClasses: JUMP, ignoredIds: [...ignored()], watch: { g: [...watchSets().g], t: [...watchSets().t], pg: [...watchSets().pg], pt: [...watchSets().pt] },
     jumpReach: [...new Set(jumpView().flatMap(j => j.inRange))], watchCount: watchSet().size, sysInfo: sysInfo(),
     ui: { edit: editMode, mode: settings.overlay.mode, keys: keyStatus }, snap, now: now(), update: upd, dataDir: DATA_DIR,
   };
@@ -853,7 +858,7 @@ function startServer() {
     const u = new URL(req.url, "http://x");
     const send = (code, body, type) => { res.writeHead(code, { "Content-Type": type, "Cache-Control": "no-store" }); res.end(body); };
     if (req.method === "GET") {
-      if (u.pathname === "/") return send(200, read("map.html").replace("__VERSION__", VERSION).replace("__DATA__", () => JSON.stringify(MAP)).replace("__SHIPS__", () => JSON.stringify({ types: SHIPS.types, groups: SHIPS.groups })), "text/html; charset=utf-8");
+      if (u.pathname === "/") return send(200, read("map.html").replace("__VERSION__", VERSION).replace("__DATA__", () => JSON.stringify(MAP)).replace("__SHIPS__", () => JSON.stringify({ types: SHIPS.types, groups: SHIPS.groups, defaults: Object.keys(SHIPS.groupClass).map(Number) })), "text/html; charset=utf-8");
       if (u.pathname === "/overlay") return send(200, read("overlay.html").replace("__DATA__", () => JSON.stringify(U)).replace("__SHIPS__", JSON.stringify(SHIPS.groupClass)), "text/html; charset=utf-8");
       if (u.pathname === "/pick") return send(200, read("pick.html"), "text/html; charset=utf-8");
       if (u.pathname === "/card") return send(200, read("card.html"), "text/html; charset=utf-8");
