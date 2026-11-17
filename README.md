@@ -38,7 +38,9 @@ Optional snapshot key: screenshot + Windows OCR of the Local area you mark, or `
 sent to EVE (grey area under CCP's input rules — your own risk).
 
 **Pilot lookup** — mark the Local area once (tray → *Mark Local area*), then middle-click a name in
-Local for a zKill card (danger, gang/solo, kills, top ships/systems). The click still reaches EVE.
+Local for a zKill card (danger, gang/solo, kills, top ships/systems). The click still reaches EVE. OCR misreads
+(l/I/1, O/0, rn/m…) are corrected by matching against your last Local `Ctrl+C`, pilots on recent kills,
+and look-alike spellings that exist in ESI — copy Local once per system for the best hit rate.
 
 **Jump range** — log your blops/capital toons in with ESI (Map & settings → Jump drive toons).
 While one sits in a jump-drive hull, alerts and Best nearby get ⤳✓ when in range, using its real

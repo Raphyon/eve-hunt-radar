@@ -90,12 +90,17 @@ function Get-Ocr {
 function Read-Rect($x, $y, $w, $h, $out) {
   $src = New-Object System.Drawing.Bitmap $w, $h
   $g = [System.Drawing.Graphics]::FromImage($src); $g.CopyFromScreen($x, $y, 0, 0, $src.Size); $g.Dispose()
-  $S = 3
+  $S = 4
   $big = New-Object System.Drawing.Bitmap ($w*$S), ($h*$S)
   $g = [System.Drawing.Graphics]::FromImage($big)
   $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+  # grayscale -> invert (dark text on white) -> contrast x1.8, so coloured standings/names all read the same
+  $c = 1.8; $r = -$c * 0.30; $gr = -$c * 0.59; $b = -$c * 0.11; $k = $c - ($c - 1) / 2
   $cm = New-Object System.Drawing.Imaging.ColorMatrix
-  $cm.Matrix00 = -1; $cm.Matrix11 = -1; $cm.Matrix22 = -1; $cm.Matrix40 = 1; $cm.Matrix41 = 1; $cm.Matrix42 = 1
+  $cm.Matrix00 = $r;  $cm.Matrix01 = $r;  $cm.Matrix02 = $r
+  $cm.Matrix10 = $gr; $cm.Matrix11 = $gr; $cm.Matrix12 = $gr
+  $cm.Matrix20 = $b;  $cm.Matrix21 = $b;  $cm.Matrix22 = $b
+  $cm.Matrix40 = $k;  $cm.Matrix41 = $k;  $cm.Matrix42 = $k
   $ia = New-Object System.Drawing.Imaging.ImageAttributes; $ia.SetColorMatrix($cm)
   $g.DrawImage($src, (New-Object System.Drawing.Rectangle 0, 0, ($w*$S), ($h*$S)), 0, 0, $w, $h, [System.Drawing.GraphicsUnit]::Pixel, $ia)
   $g.Dispose(); $big.Save($out, [System.Drawing.Imaging.ImageFormat]::Png); $big.Dispose(); $src.Dispose()
