@@ -301,6 +301,7 @@ function applyUi(d) {
   if (hp && hp.ok === false) $("hlpErr").textContent = "⚠ Windows helper failed, so active character, window titles and middle-click lookup are off. Copy this into a GitHub issue or send it to whoever shared the radar with you: " + hp.err;
   const sn = d.snap; $("snMsg").textContent = sn.msg ? sn.msg + " · " + agoS(sn.t) + " ago" : (st.localArea ? "Local area set." : "No Local area marked yet.");
   if (uiLoaded) return; uiLoaded = true;
+  $("gs").open = !(d.chars || []).length;          // first run (no toons found yet): show the getting-started steps
   $("ovOp").value = st.overlay.opacity; $("opV").textContent = Math.round(st.overlay.opacity * 100) + "%"; $("ovJ").value = String(st.overlay.mapJumps || 4);
   $("sndOn").checked = st.sound !== false; $("luOn").checked = st.lookupOn !== false;
   $("esiCid").value = st.esiClientId || ""; $("autoSt").checked = !!st.autostart;

@@ -19,6 +19,11 @@ svg{width:100%;height:100%;display:block;user-select:none}
 h1{font-size:15px;margin:0 0 2px}
 h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:16px 0 6px}
 .sub{color:var(--mut);font-size:12px}
+.gs{background:rgba(57,198,255,.07);border:1px solid rgba(57,198,255,.25);border-radius:8px;padding:8px 10px;margin:10px 0}
+.gs summary{cursor:pointer}
+.gs ol,#radar details ol{margin:8px 0 6px;padding-left:20px;font-size:12px}.gs li,#radar details li{margin-bottom:5px}
+#radar details summary{cursor:pointer;color:#9cc9ff}
+#radar a{color:#9cc9ff}
 label{display:block;font-size:12px;color:var(--mut);margin:8px 0 3px}
 textarea,input[type=text]{width:100%;background:#0d1014;color:var(--txt);border:1px solid var(--line);border-radius:5px;padding:6px;font:12px ui-monospace,Menlo,monospace;resize:vertical}
 button{background:#222a33;color:var(--txt);border:1px solid var(--line);border-radius:5px;padding:5px 9px;font-size:12px;cursor:pointer}
@@ -94,6 +99,8 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
   <div class="leg">
    <span class="sw" style="background:transparent;border:3px solid var(--camp)"></span><span>Watched system</span>
    <span class="sw" style="background:#5a2e0e;border:1.5px solid #b8621f"></span><span>Lowsec</span>
+   <span class="sw" style="background:#4a1216;border:1.5px solid #a8323a"></span><span>Nullsec</span>
+   <span class="sw" style="background:#1a1f25;border:1px solid #3a424b;opacity:.5"></span><span>Highsec (never tracked)</span>
    <span class="sw" style="height:0;border-top:2px dashed #5b636d"></span><span>Gate across a region border</span>
    __RADARLEGEND__
   </div>
@@ -102,23 +109,26 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
  <div id="side">
   __RADARPANEL__
   <h1>New Eden</h1>
-  <div class="sub">CCP's in-game 2D map layout (SDE build 3707965), all known space. Highsec is drawn dimmed; its kills are never tracked. Drag to pan, scroll to zoom (zoom in for names), Find system to jump.</div>
+  <div class="sub">CCP's in-game 2D map layout, all known space; highsec dimmed (never tracked).<br>
+  <b>Move:</b> drag to pan, scroll to zoom (names appear when zoomed in), <i>Find system</i> + Enter to jump there, <code>Ctrl+Shift+B</code> to open/close this window.<br>
+  <b>Read:</b> rings = kills in the last 30 min (magenta = watched ship), red/orange dots and glows = busiest systems near you. Click a system with a ring to see its kills.</div>
 
 
   <h2>Targets</h2>
   <label>Watched systems (systems, constellations or regions)</label>
   <textarea id="tCamp" rows="3"></textarea>
-  <div class="sub">Watched ships killing within a few jumps of these beep, wherever you are.</div>
-  <label>Ignore (no alerts, not in Best nearby, dimmed)</label>
+  <div class="sub">Your camps and hunting grounds (red outline on both maps). A ✗ pinged ship killing within a few jumps of one beeps — but only while the toon you're flying is within your watch range of it. Names, constellations or whole regions, separated by commas.</div>
+  <label>Ignore (no alerts, no heat, not in Best nearby, dimmed)</label>
   <textarea id="tIgn" rows="2" placeholder="systems, constellations or regions"></textarea>
   <div class="sub" id="ignWarn" style="color:#ff9a2b"></div>
   <div class="row"><button id="apply">Apply</button><button id="defaults">Defaults</button></div>
+  <div class="sub">Press <i>Apply</i> after editing. You can also click a system on the map and press <i>Ignore</i>.</div>
   <label class="chk"><input type="checkbox" id="cDim"> Dim everything &gt; 2 jumps from targets</label>
-  <label class="chk"><input type="checkbox" id="cStubs" checked> Show exits to other regions</label>
+  <label class="chk" style="display:none"><input type="checkbox" id="cStubs"> Show exits to other regions</label>
   <label class="chk"><input type="checkbox" id="cSec"> Colour outlines by security</label>
 
   <h2>Selected</h2>
-  <div id="info" class="sub">Click a system.</div>
+  <div id="info" class="sub">Click a system for its neighbours, distance to your targets and an Ignore button.</div>
 
  </div>
 </div>
