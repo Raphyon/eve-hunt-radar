@@ -35,6 +35,10 @@ tr.cl{cursor:pointer}tr.cl:hover td{background:#1c232b}
 #info b{font-size:14px}
 .tag{display:inline-block;padding:0 5px;border-radius:3px;font-size:11px;margin-right:3px}
 #zoom{position:absolute;left:10px;bottom:10px;display:flex;gap:4px}
+#sysPop{position:absolute;left:10px;top:48px;width:340px;max-height:calc(100% - 110px);overflow:auto;background:rgba(21,26,32,.97);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:none;box-shadow:0 6px 24px rgba(0,0,0,.5);z-index:6}
+#sysPop.on{display:block}
+#sysPop .lh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+#sysPop .lh span:last-child{cursor:pointer;color:var(--mut);font-size:15px;padding:0 4px}
 #legPop{position:absolute;left:10px;bottom:52px;width:320px;background:rgba(21,26,32,.97);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:none;box-shadow:0 6px 24px rgba(0,0,0,.5);z-index:5}
 #legPop.on{display:block}
 #legPop .lh{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
@@ -84,6 +88,7 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
  <div id="map">
   <svg id="svg"><g id="vp"><g id="gRegions"></g><g id="gHeat"></g><g id="gEdges"></g><g id="gStubs"></g><g id="gPulse"></g><g id="gNodes"></g></g></svg>
   <input id="search" type="text" placeholder="Find system… (Enter)">
+  <div id="sysPop"></div>
   <div id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="fit">Fit</button><button id="legBtn" title="Legend">ⓘ Legend</button></div>
   <div id="legPop"><div class="lh"><b>Legend</b><span id="legX" title="Close">✕</span></div>
   <div class="leg">
@@ -301,6 +306,7 @@ function select(id, center) {
   $("info").querySelectorAll("a").forEach(a => a.onclick = ev => { ev.preventDefault(); select(+a.dataset.id, true); });
   if ($("ignBtn")) $("ignBtn").onclick = () => { window.toggleIgnore(id); setTimeout(() => select(id, false), 400); };
   flashId = id; flash(id);
+  if (window.showSysKills) showSysKills(id);
   if (center) centerOn(s);
 }
 let flashEl = null;
