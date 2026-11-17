@@ -22,8 +22,17 @@ a{color:#9cc9ff;text-decoration:none}a:hover{text-decoration:underline}
 <script>
 const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const n = v => v == null ? "–" : v >= 1e9 ? (v / 1e9).toFixed(1) + "b" : v >= 1e6 ? Math.round(v / 1e6) + "m" : v >= 1e4 ? Math.round(v / 1e3) + "k" : String(v);
-const ago = t => { const s = (Date.now() - Date.parse(t)) / 1000; return s < 5400 ? Math.round(s / 60) + "m" : Math.round(s / 3600) + "h"; };
+const ago = t => { const s = (Date.now() - Date.parse(t)) / 1000; return s < 5400 ? Math.round(s / 60) + "m" : s < 172800 ? Math.round(s / 3600) + "h" : Math.round(s / 86400) + "d"; };
 const close = () => fetch("/cmd", { method: "POST", body: JSON.stringify({ cmd: "cardclose" }) });
+function actHtml(a) {
+  if (!a) return "";
+  if (a.loading) return `<h4>Recent activity</h4><div class="mut">checking last 7 / 30 / 90 days…</div>`;
+  if (!a.recent || !a.recent.length) return `<h4>Recent activity</h4><div class="mut">No PvP in the last 90 days</div>`;
+  const head = `<h4>Last ${a.days} days${a.days > 7 ? ` <span style="text-transform:none;letter-spacing:0">(nothing in the last ${a.days === 30 ? 7 : 30})</span>` : ""}</h4>`;
+  const sum = `<div class="ln"><b>${a.kills}${a.more ? "+" : ""}</b> kills · <b>${a.losses}</b> losses</div>`;
+  const rows = a.recent.map(r => `<div class="ln"><span class="${r.lost ? "mut" : "amb"}">${r.lost ? "lost" : "kill"}</span> ${esc(r.ship)} @ <a href="${esc(r.link)}" target="_blank">${esc(r.sys)}</a> <span class="mut">${r.sec != null ? r.sec.toFixed(1) : ""} · ${ago(r.t)} ago</span></div>`).join("");
+  return head + sum + rows;
+}
 let v = 0;
 async function poll() {
   try {
@@ -43,6 +52,7 @@ function render(d) {
       <div class="bar"><i style="width:${dg ?? 0}%;background:${col}"></i></div></div>
       <div class="grid"><div><b>${n(s.kills)}</b><span>kills</span></div><div><b>${n(s.losses)}</b><span>losses</span></div><div><b>${n(s.solo)}</b><span>solo</span></div><div><b>${n(s.active)}</b><span>kills 7d</span></div></div>
       ${(d.seen || []).length ? `<h4>Seen here recently</h4>` + d.seen.map(z => `<div class="ln ${z.watched && z.role === "attacker" ? "pnk" : "amb"}">${z.role} in ${esc(z.ship)} @ ${esc(z.sys)} · ${ago(z.t)} ago</div>`).join("") : ""}
+      ${actHtml(d.act)}
       ${(s.ships || []).length ? `<h4>Top ships</h4><div class="ln">${s.ships.map(z => esc(z.name) + (z.kills != null ? ` <span class="mut">${z.kills}</span>` : "")).join(" · ")}</div>` : ""}
       ${(s.systems || []).length ? `<h4>Top systems</h4><div class="ln">${s.systems.map(z => esc(z.name) + (z.kills != null ? ` <span class="mut">${z.kills}</span>` : "")).join(" · ")}</div>` : ""}
       <div class="ft"><span class="mut">${d.readAs ? `read "${esc(d.readAs)}" → corrected` : d.zk ? "zKillboard stats" : "zKill unavailable"}</span><a href="${esc(d.link)}" target="_blank">open zKill ↗</a></div>`;
