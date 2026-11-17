@@ -23,7 +23,8 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const TOKENS_FILE = path.join(DATA_DIR, "tokens.json");      // ESI refresh tokens — never share the data folder
 
-const MAP = JSON.parse(fs.readFileSync(path.join(HERE, "data.json"), "utf8"));   // big-map layout: CCP position2D for all known space (scripts/build-map-data.py)
+const MAP = JSON.parse(fs.readFileSync(path.join(HERE, "data.json"), "utf8"));
+const P2 = {}; MAP.sys.forEach(s => P2[s.id] = [s.x, s.y]);   // same in-game 2D layout for the overlay mini-map   // big-map layout: CCP position2D for all known space (scripts/build-map-data.py)
 const SHIPS = JSON.parse(fs.readFileSync(path.join(HERE, "ships.json"), "utf8"));
 
 // ------------------------------------------------------------- map / graph
@@ -898,7 +899,7 @@ function startServer() {
     const send = (code, body, type) => { res.writeHead(code, { "Content-Type": type, "Cache-Control": "no-store" }); res.end(body); };
     if (req.method === "GET") {
       if (u.pathname === "/") return send(200, read("map.html").replace("__VERSION__", VERSION).replace("__DATA__", () => JSON.stringify(MAP)).replace("__SHIPS__", () => JSON.stringify({ types: SHIPS.types, groups: SHIPS.groups, defaults: Object.keys(SHIPS.groupClass).map(Number) })), "text/html; charset=utf-8");
-      if (u.pathname === "/overlay") return send(200, read("overlay.html").replace("__DATA__", () => JSON.stringify(U)).replace("__SHIPS__", JSON.stringify(SHIPS.groupClass)), "text/html; charset=utf-8");
+      if (u.pathname === "/overlay") return send(200, read("overlay.html").replace("__DATA__", () => JSON.stringify(Object.assign({ p2: P2 }, U))).replace("__SHIPS__", JSON.stringify(SHIPS.groupClass)), "text/html; charset=utf-8");
       if (u.pathname === "/pick") return send(200, read("pick.html"), "text/html; charset=utf-8");
       if (u.pathname === "/card") return send(200, read("card.html"), "text/html; charset=utf-8");
       if (u.pathname === "/login") {
