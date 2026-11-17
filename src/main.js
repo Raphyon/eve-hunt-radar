@@ -23,16 +23,21 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const TOKENS_FILE = path.join(DATA_DIR, "tokens.json");      // ESI refresh tokens — never share the data folder
 
-const MAP = JSON.parse(fs.readFileSync(path.join(HERE, "data.json"), "utf8"));
+const MAP = JSON.parse(fs.readFileSync(path.join(HERE, "data.json"), "utf8"));   // big-map page layout (3 regions) until region views land
 const SHIPS = JSON.parse(fs.readFileSync(path.join(HERE, "ships.json"), "utf8"));
 
 // ------------------------------------------------------------- map / graph
 const dispSec = s => (s > 0 && s < 0.05) ? 0.1 : Math.floor(s * 10 + 0.5) / 10;   // game rounding: 0.45 -> 0.5
-const SYS = {}; MAP.sys.forEach(s => SYS[s.id] = s);
-const BYNAME = {}; MAP.sys.forEach(s => BYNAME[s.n.toLowerCase()] = s.id);
-const ADJ = {}; MAP.sys.forEach(s => ADJ[s.id] = []);
-MAP.gates.forEach(([a, b]) => { ADJ[a].push(b); ADJ[b].push(a); });
-const AREA = new Set(MAP.sys.filter(s => dispSec(s.s) < 0.5).map(s => s.id));   // lowsec only
+// All of known space (no wormholes). universe.json: sys = [id, name, sec, regionIdx, constIdx, x, y, z] (light years)
+const U = JSON.parse(fs.readFileSync(path.join(HERE, "universe.json"), "utf8"));
+const SYS = {}, BYNAME = {}, ADJ = {};
+U.sys.forEach(([id, n, sec, ri, ci, x, y, z]) => {
+  SYS[id] = { id, n, s: sec, r: U.regions[ri][1], c: U.consts[ci][1], p: x == null ? null : [x, y, z] };
+  BYNAME[n.toLowerCase()] = id; ADJ[id] = [];
+});
+U.gates.forEach(([a, b]) => { const A = U.sys[a][0], B = U.sys[b][0]; ADJ[A].push(B); ADJ[B].push(A); });
+const BAND = id => { const s = SYS[id]; if (!s) return null; if (s.r === "Pochven") return "poch"; const d = dispSec(s.s); return d <= 0 ? "null" : d < 0.5 ? "low" : "high"; };
+const inSpace = id => { const b = BAND(id); return !!b && b !== "high" && settings.space[b] !== false; };   // never highsec / wormholes
 const TYPES = {}; for (const k in SHIPS.types) TYPES[+k] = SHIPS.types[k];      // typeID -> [groupID, name]
 const GROUP_CLASS = {}; for (const k in SHIPS.groupClass) GROUP_CLASS[+k] = SHIPS.groupClass[k];
 function bfs(src, maxd = 99) {
@@ -46,6 +51,8 @@ const DEFAULTS = {
   camp: "Gonditsa, Ami, Fensi, Vecamia, Ahbazon", hunt: "Beke, Armi, Kihkounad", ignore: "",
   classes: { BS: true, MAR: true, BLOPS: true, T3C: true, CAP: true, BC: true, CMD: true, ICS: true, EXH: true },
   victim: true, range: 3, sound: true, near: true, nearRange: 5, chatlogs: "",
+  // v10: watch range (kills outside are dropped before any lookup) and space bands
+  watchJumpsOn: true, watchJumps: 20, watchLyOn: true, watchLy: 16, space: { low: true, null: true, poch: true }, beepGap: 10,
   keyEdit: "Ctrl+Shift+O", keyMode: "Ctrl+Shift+M",
   snapOn: false, keySnap: "Scrolllock", snapMode: "Screenshot", localArea: null, lookupOn: true,
   jumpToons: {},                 // (unused since v9.3, kept for old settings files)
@@ -109,7 +116,7 @@ function parseTargets(txt) {
   for (const t of String(txt || "").split(/[,\n;]+/)) {
     const k = t.trim().toLowerCase(); if (!k) continue;
     if (BYNAME[k]) out.add(BYNAME[k]);
-    MAP.sys.forEach(s => { if (s.c.toLowerCase() === k) out.add(s.id); });
+    for (const id in SYS) if (SYS[id].c.toLowerCase() === k || SYS[id].r.toLowerCase() === k) out.add(+id);
   }
   return out;
 }
@@ -125,38 +132,61 @@ function nearestAnchor(sid) {
   const who = runningChars().find(([, c]) => c.sys === best[1]);
   return [best[0], who ? who[0] + " (you)" : SYS[best[1]].n];
 }
+// ---- watch range: union of <= N gate jumps from any running character and <= X LY from any jump toon
+let watchCache = { key: "", set: new Set() };
+function watchSet() {
+  const run = runningChars().filter(([, c]) => SYS[c.sys]);
+  const J = typeof jumpView === "function" ? jumpView() : [];
+  const key = [settings.watchJumpsOn, settings.watchJumps, settings.watchLyOn, settings.watchLy, JSON.stringify(settings.space),
+    run.map(([n, c]) => n + c.sys).join(), J.map(j => j.name + j.sysName).join()].join("|");
+  if (key === watchCache.key) return watchCache.set;
+  const set = new Set();
+  if (settings.watchJumpsOn) run.forEach(([, c]) => bfs(c.sys, +settings.watchJumps || 20).forEach((_, id) => set.add(id)));
+  if (settings.watchLyOn) J.forEach(j => { const from = coordsOf(j.sysName); if (!from) return;
+    for (const id in SYS) { const p = SYS[id].p; if (p && lyBetween(from, p) <= (+settings.watchLy || 16)) set.add(+id); } });
+  for (const id of [...set]) if (!inSpace(id)) set.delete(id);
+  watchCache = { key, set }; return set;
+}
+let lastBeep = 0;
 function maybeAlert(ev) {
-  if (!status.live) return;                               // no alerts for the startup replay
-  if (ignored().has(ev.sys)) return;                      // you told the radar to ignore this system
+  // v10 rules:  <= beep radius of the character you fly: any PvP (klaxon) / watched ship (beep)
+  //             near camp/hunt targets (within watch range): watched ships only (beep)
+  //             everything else in watch range: silent (feed + map)
+  if (!status.live) return;
+  if (ignored().has(ev.sys)) return;
   const a = ev.attackers.filter(p => watchedClass(p.group));
   const v = watchedClass(ev.victim.group) && settings.victim;
-  const me = activeChar(); let nearD = null;
-  const mySys = me && chars.get(me).sys;
-  const meDist = SYS[mySys] ? (bfs(mySys, 40).get(ev.sys) ?? null) : null;   // gate jumps from the character you're flying
-  if (settings.near && me && SYS[chars.get(me).sys]) { const d = bfs(chars.get(me).sys, +settings.nearRange || 5); if (d.has(ev.sys)) nearD = d.get(ev.sys); }
   const watched = !!(a.length || v);
-  let [d, near] = nearestAnchor(ev.sys);
-  if (!(watched && d <= +settings.range) && nearD === null) return;
+  const me = activeChar(), mySys = me && chars.get(me).sys;
+  const R = +settings.nearRange || 5;
+  const meDist = SYS[mySys] ? (bfs(mySys, Math.max(R, 40)).get(ev.sys) ?? null) : null;
+  const nearMe = meDist !== null && meDist <= R;
+  const T = new Set([...parseTargets(settings.camp), ...parseTargets(settings.hunt)]);
+  let tDist = 99, tName = null;
+  if (watched && T.size) { const d = bfs(ev.sys, +settings.range || 3); T.forEach(t => { if (d.has(t) && d.get(t) < tDist) { tDist = d.get(t); tName = SYS[t].n; } }); }
+  const nearTarget = watched && tName !== null;
+  if (!(nearMe && (watched || settings.near)) && !nearTarget) return;
   const what = a.length ? [...new Set(a.map(p => p.shipName))].sort().join(", ")
     : v ? ev.victim.shipName + " died"
       : `${ev.victim.shipName} killed by ${ev.attackers.length} (${[...new Set(ev.attackers.map(p => p.shipName))].slice(0, 3).join(", ")})`;
-  if (nearD !== null) { d = nearD; near = me + " (you)"; }
-  alerts.push({ n: ++alSeq, t: now(), sys: ev.sys, sysName: SYS[ev.sys].n, dist: d, near, meDist, jumpers: jumpersFor(ev.sys), what, attacker: a.length > 0, watched, nearMe: nearD !== null, link: ev.link });
+  const t = now(), silent = t - lastBeep < (+settings.beepGap || 0); if (!silent) lastBeep = t;
+  alerts.push({ n: ++alSeq, t, sys: ev.sys, sysName: SYS[ev.sys].n, sec: dispSec(SYS[ev.sys].s), dist: nearMe ? meDist : tDist, near: nearMe ? me + " (you)" : tName,
+    meDist, jumpers: jumpersFor(ev.sys), what, attacker: a.length > 0, watched, nearMe, silent, link: ev.link });
   if (alerts.length > 50) alerts.shift();
-  log(`ALERT${nearD !== null ? " [NEAR YOU]" : ""} ${SYS[ev.sys].n} (${d}j from ${near}): ${what}`);
+  log(`ALERT${nearMe ? " [NEAR YOU]" : " [TARGET]"}${silent ? " (silent)" : ""} ${SYS[ev.sys].n}: ${what}`);
 }
 
 // ------------------------------------------------------------- kill feed (zKillboard R2Z2)
 async function handle(pkg) {
   const km = pkg.esi || pkg.killmail || {}, zkb = pkg.zkb || {}, sid = km.solar_system_id;
   status.seen++;
-  if (!AREA.has(sid) || zkb.npc) return;
+  if (!inSpace(sid) || zkb.npc || !watchSet().has(sid)) return;     // out of watch range: dropped before any lookup
   const atk = (km.attackers || []).filter(x => x.character_id); if (!atk.length) return;
   const v = km.victim || {};
   await resolveNames([v, ...atk].flatMap(p => [p.character_id, p.corporation_id, p.alliance_id]));
   const pack = async p => { const [g, n] = await shipInfo(p.ship_type_id); return { ship: p.ship_type_id, shipName: n, group: g, char: p.character_id, charName: names.get(p.character_id), corpName: names.get(p.corporation_id), alliName: names.get(p.alliance_id), fb: !!p.final_blow }; };
   const kid = km.killmail_id || pkg.killmail_id;
-  const ev = { id: kid, time: km.killmail_time, sys: sid, val: zkb.totalValue || 0, solo: !!zkb.solo, victim: await pack(v), attackers: await Promise.all(atk.map(pack)), link: `https://zkillboard.com/kill/${kid}/`, n: ++evSeq };
+  const ev = { id: kid, time: km.killmail_time, sys: sid, sysName: SYS[sid].n, sec: dispSec(SYS[sid].s), region: SYS[sid].r, val: zkb.totalValue || 0, solo: !!zkb.solo, victim: await pack(v), attackers: await Promise.all(atk.map(pack)), link: `https://zkillboard.com/kill/${kid}/`, n: ++evSeq };
   events.push(ev); if (events.length > 600) events.shift();
   for (const [role, p] of [["victim", ev.victim], ...ev.attackers.map(p => ["attacker", p])]) {
     if (!p.char) continue; const l = seen.get(p.char) || [];
@@ -188,8 +218,8 @@ async function heatLoop() {
       const [c1, kills] = await get(`${ESI}/universe/system_kills/`), [c2, jumps] = await get(`${ESI}/universe/system_jumps/`);
       if (c1 !== 200 || c2 !== 200) throw new Error(`ESI kills ${c1} / jumps ${c2}`);
       const h = {};
-      (jumps || []).forEach(j => { if (AREA.has(j.system_id)) (h[j.system_id] = h[j.system_id] || [0, 0, 0, 0])[0] = j.ship_jumps; });
-      (kills || []).forEach(k => { if (AREA.has(k.system_id)) { const r = h[k.system_id] = h[k.system_id] || [0, 0, 0, 0]; r[1] = k.ship_kills; r[2] = k.pod_kills; r[3] = k.npc_kills; } });
+      (jumps || []).forEach(j => { if (BAND(j.system_id) && BAND(j.system_id) !== "high") (h[j.system_id] = h[j.system_id] || [0, 0, 0, 0])[0] = j.ship_jumps; });
+      (kills || []).forEach(k => { if (BAND(k.system_id) && BAND(k.system_id) !== "high") { const r = h[k.system_id] = h[k.system_id] || [0, 0, 0, 0]; r[1] = k.ship_kills; r[2] = k.pod_kills; r[3] = k.npc_kills; } });
       heat = h; heatAt = now(); status.heat = "ok"; await sleep(600000);
     } catch (e) { status.heat = "error: " + String(e.message).slice(0, 120); await sleep(60000); }
   }
@@ -205,7 +235,7 @@ function bestNearby(maxj = 6, n = 8) {
   const rows = [];
   const IG = ignored();
   dist.forEach((d, sid) => {
-    if (!AREA.has(sid) || IG.has(sid)) return;
+    if (!inSpace(sid) || IG.has(sid)) return;
     const [j, k, p, npc] = heat[sid] || [0, 0, 0, 0]; const w = recent[sid] || 0;
     const score = npc + 40 * w + 8 * (k + p); if (score <= 0) return;
     rows.push({ sys: sid, n: SYS[sid].n, sec: dispSec(SYS[sid].s), j: d, npc, kills: k + p, jumps: j, watched: w, score: Math.round(score / (1 + 0.35 * d) * 10) / 10, local: localCounts[sid] || null });
@@ -410,27 +440,25 @@ const JUMP = {
 const JDC_SKILL = 21611;
 const jumpRange = (key, jdc) => Math.round(JUMP[key][1] * (1 + 0.2 * (jdc ?? 5)) * 100) / 100;
 const LY = 9.4607e15;
-const coordByName = {};   // lower-case system name -> [x,y,z] in 1e12 m  (map systems bundled; others fetched from ESI)
-MAP.sys.forEach(s => { if (s.p) coordByName[s.n.toLowerCase()] = s.p; });
-const coordPending = new Set();
-async function fetchCoords(name) {
-  const k = name.toLowerCase(); if (coordByName[k] || coordPending.has(k)) return; coordPending.add(k);
+// positions in LY: bundled for known space; systems without one (new regions) are fetched from ESI once
+const coordFetched = {}, coordPending = new Set();
+async function fetchCoords(id) {
+  if (coordPending.has(id)) return; coordPending.add(id);
   try {
-    const [c, b] = await get(`${ESI}/universe/ids/`, { body: [name] });
-    const sys = c === 200 && b && (b.systems || [])[0];
-    if (!sys) { coordByName[k] = null; return; }
-    const [c2, b2] = await get(`${ESI}/universe/systems/${sys.id}/`);
-    const p = c2 === 200 && b2 && b2.position;
-    coordByName[k] = p ? [p.x / 1e12, p.y / 1e12, p.z / 1e12] : null;
-    if (p) log(`coords: ${name}`);
-  } finally { coordPending.delete(k); }
+    const [c, b] = await get(`${ESI}/universe/systems/${id}/`);
+    const p = c === 200 && b && b.position;
+    coordFetched[id] = p ? [p.x / LY, p.y / LY, p.z / LY] : null;
+    if (p) log(`coords: ${SYS[id] ? SYS[id].n : id}`);
+  } finally { coordPending.delete(id); }
 }
 function coordsOf(sysName) {
-  if (!sysName) return null; const k = sysName.toLowerCase();
-  if (coordByName[k] === undefined) fetchCoords(sysName);
-  return coordByName[k] || null;
+  if (!sysName) return null; const id = BYNAME[sysName.toLowerCase()]; if (!id) return null;
+  if (SYS[id].p) return SYS[id].p;
+  if (coordFetched[id] === undefined) fetchCoords(id);
+  if (coordFetched[id]) SYS[id].p = coordFetched[id];
+  return coordFetched[id] || null;
 }
-const lyBetween = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) * 1e12 / LY;
+const lyBetween = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 // ---- optional ESI login: reads ship type only (scope esi-location.read_ship_type.v1)
 const crypto = require("crypto");
 const JUMP_GROUP = { 898: "BLOPS", 485: "DREAD", 4594: "LANCER", 547: "CARRIER", 1538: "FAX", 5120: "CMDCAR", 659: "SUPER", 30: "TITAN", 902: "JF", 883: "RORQ" };
@@ -481,16 +509,19 @@ function hullOf(name) {   // ESI only: a toon counts as a jumper while ESI says 
   return e && now() - e.t < 300 ? { key: e.key, src: "ESI", ship: e.shipName } : { key: null, src: null, ship: null };
 }
 
+let jvCache = { t: 0, v: [] };
 function jumpView() {
+  if (Date.now() - jvCache.t < 1000) return jvCache.v;
   const out = [];
   for (const id of Object.keys(esi.tokens)) {
     const name = esi.tokens[id].name, c = chars.get(name) || {};
     const h = hullOf(name); if (!h.key || !JUMP[h.key]) continue;
     const jdc = esi.tokens[id].jdc ?? null, range = jumpRange(h.key, jdc), sysName = c.sysName || null, from = coordsOf(sysName);
     const v = { name, clsName: h.ship, range, jdc, jdcKnown: jdc !== null, sysName, known: !!from, inRange: [] };
-    if (from) MAP.sys.forEach(s => { if (s.p && AREA.has(s.id) && lyBetween(from, s.p) <= range) v.inRange.push(s.id); });
+    if (from) for (const sid in SYS) { const p = SYS[sid].p; if (p && inSpace(+sid) && lyBetween(from, p) <= range) v.inRange.push(+sid); }
     out.push(v);
   }
+  jvCache = { t: Date.now(), v: out };
   return out;
 }
 function jumpersFor(sid) {   // names of jump toons that can reach this system
@@ -652,7 +683,7 @@ function hideCard() { clearTimeout(card.timer); card.seq++; if (card.win && !car
 
 // ------------------------------------------------------------- windows: overlay, map, area picker, tray
 let overlay = null, mapWin = null, tray = null, editMode = false;
-const OV_SIZE = { strip: [560, 62], map: [400, 440] };
+const OV_SIZE = { strip: [560, 62], map: [480, 540] };
 function overlayBounds() {
   const m = settings.overlay.mode === "map" ? "map" : "strip";
   const b = settings.overlay[m];
@@ -779,12 +810,20 @@ async function importOldSettings() {
 // ------------------------------------------------------------- local web server (overlay + map pages talk to this)
 const read = f => fs.readFileSync(path.join(HERE, f), "utf8");
 const page = (title, body) => `<!DOCTYPE html><meta charset=utf-8><title>${title}</title><body style="background:#0d1014;color:#d8dee6;font:15px system-ui;padding:40px;max-width:640px">${body}</body>`;
+// names/sec/region for every system the pages may reference (the big map page only knows its own region data)
+function sysInfo() {
+  const ids = new Set();
+  events.forEach(e => ids.add(e.sys)); alerts.forEach(a => ids.add(a.sys)); chars.forEach(c => c.sys && ids.add(c.sys));
+  if (local.sys) ids.add(local.sys); bestNearby().forEach(r => ids.add(r.sys));
+  const o = {}; ids.forEach(id => { const s = SYS[id]; if (s) o[id] = [s.n, dispSec(s.s), s.r]; }); return o;
+}
 function statePayload(q) {
   const since = +(q.get("since") || 0), asince = +(q.get("asince") || 0);
   return {
     version: VERSION, status, heat, heatAt, events: events.filter(e => e.n > since), alerts: alerts.filter(a => a.n > asince),
     chars: charView(), local: localView(), best: bestNearby(), localCounts, settings, chatlogs: chatlog,
-    jump: jumpView(), jumpToons: jumpToonsView(), jumpClasses: JUMP, ignoredIds: [...ignored()],
+    jump: jumpView().map(j => Object.assign({}, j, { inRange: undefined, inRangeCount: j.inRange.length })), jumpToons: jumpToonsView(), jumpClasses: JUMP, ignoredIds: [...ignored()],
+    jumpReach: [...new Set(jumpView().flatMap(j => j.inRange))], watchCount: watchSet().size, sysInfo: sysInfo(),
     ui: { edit: editMode, mode: settings.overlay.mode, keys: keyStatus }, snap, now: now(), update: upd, dataDir: DATA_DIR,
   };
 }
@@ -795,7 +834,7 @@ function startServer() {
     const send = (code, body, type) => { res.writeHead(code, { "Content-Type": type, "Cache-Control": "no-store" }); res.end(body); };
     if (req.method === "GET") {
       if (u.pathname === "/") return send(200, read("map.html").replace("__VERSION__", VERSION).replace("__DATA__", JSON.stringify(MAP)).replace("__SHIPS__", JSON.stringify(SHIPS.groupClass)), "text/html; charset=utf-8");
-      if (u.pathname === "/overlay") return send(200, read("overlay.html").replace("__DATA__", JSON.stringify(MAP)).replace("__SHIPS__", JSON.stringify(SHIPS.groupClass)), "text/html; charset=utf-8");
+      if (u.pathname === "/overlay") return send(200, read("overlay.html").replace("__DATA__", () => JSON.stringify(U)).replace("__SHIPS__", JSON.stringify(SHIPS.groupClass)), "text/html; charset=utf-8");
       if (u.pathname === "/pick") return send(200, read("pick.html"), "text/html; charset=utf-8");
       if (u.pathname === "/card") return send(200, read("card.html"), "text/html; charset=utf-8");
       if (u.pathname === "/login") {
