@@ -71,7 +71,7 @@ const SND = { watched: [[1000, 120], [1400, 120], [1000, 140]], victim: [[800, 1
 function play(kind) { AC.resume(); if (kind === "both") { tone(SND.near); setTimeout(() => tone(SND.watched), 1100); } else tone(SND[kind]); }
 
 const ST = { last: 0, alast: -1, evs: [], d: null, flashT: 0 };
-function watchedP(p, st) { const c = GC[p.group]; return c && st.settings.classes[c] !== false; }
+function watchedP(p, st) { const W = st.watch || { g: [], t: [] }; return W.t.includes(p.ship) || W.g.includes(p.group); }
 function hitEv(e, st) { return dispSec(S[e.sys].s) < 0.5 && (e.attackers.some(p => watchedP(p, st)) || (st.settings.victim && watchedP(e.victim, st))); }
 
 const dtxt = a => a.meDist != null ? `${a.meDist}j from you` : `${a.dist}j from ${esc(a.near)}`;

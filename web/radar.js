@@ -1,12 +1,9 @@
 // ================= RADAR (talks to hunt_radar.py) =================
-const CLS = { BS: "Battleships", MAR: "Marauders", BLOPS: "Black Ops", T3C: "T3 cruisers", CAP: "Capitals (incl. Rorqual)", BC: "Battlecruisers", CMD: "Command ships (T2 BC)", ICS: "Industrial command (Orca/Porpoise)", EXH: "Exhumers" };
-const GC = __SHIPS__;
-const RA = { evs: [], last: 0, alast: -1, heat: {}, armed: false, ctx: null, chars: [], local: null, best: [], lc: {}, settingsLoaded: false };
-let clsOn = {}; Object.keys(CLS).forEach(k => clsOn[k] = true);
-$("classes").innerHTML = Object.entries(CLS).map(([k, v]) => `<label class="chk"><input type="checkbox" data-k="${k}" checked> ${v}</label>`).join("");
-$("classes").querySelectorAll("input").forEach(i => i.onchange = () => { clsOn[i.dataset.k] = i.checked; pushSettings(); renderFeed(); drawPulses(); });
+const SHIPDB = __SHIPS__;                       // { types: {typeID: [groupID, name]}, groups: {groupID: name} }
+const RA = { evs: [], last: 0, alast: -1, heat: {}, armed: false, ctx: null, chars: [], local: null, best: [], lc: {}, settingsLoaded: false, ws: { g: new Set(), t: new Set() } };
+let WL = [];                                   // ship watchlists (edited in the popup, saved to the radar)
 function pushSettings() {
-  fetch("/settings", { method: "POST", body: JSON.stringify({ watched: $("tCamp").value, ignore: $("tIgn").value, classes: clsOn, victim: $("pVictim").checked, range: +$("pRange").value, near: $("pNear").checked, nearRange: +$("pNearR").value,
+  fetch("/settings", { method: "POST", body: JSON.stringify({ watched: $("tCamp").value, ignore: $("tIgn").value, victim: $("pVictim").checked, range: +$("pRange").value, near: $("pNear").checked, nearRange: +$("pNearR").value,
     watchJumpsOn: $("wJOn").checked, watchJumps: +$("wJ").value || 20, watchLyOn: $("wLOn").checked, watchLy: +$("wL").value || 16,
     space: { low: $("spL").checked, null: $("spN").checked, poch: $("spP").checked }, beepGap: +$("bGap").value }) }).catch(() => {});
 }
@@ -14,7 +11,7 @@ function applySettings(st) {
   $("tCamp").value = st.watched || ""; $("tIgn").value = st.ignore || ""; $("pVictim").checked = !!st.victim; $("pRange").value = String(st.range); $("pNear").checked = st.near !== false; $("pNearR").value = String(st.nearRange || 5);
   $("wJOn").checked = st.watchJumpsOn !== false; $("wJ").value = st.watchJumps || 20; $("wLOn").checked = st.watchLyOn !== false; $("wL").value = st.watchLy || 16;
   const sp = st.space || {}; $("spL").checked = sp.low !== false; $("spN").checked = sp.null !== false; $("spP").checked = sp.poch !== false; $("bGap").value = String(st.beepGap ?? 10);
-  Object.keys(CLS).forEach(k => { clsOn[k] = st.classes[k] !== false; const i = $("classes").querySelector(`[data-k=${k}]`); if (i) i.checked = clsOn[k]; });
+  WL = JSON.parse(JSON.stringify(st.watchlists || [])); wlSummary();
   renderAll();
 }
 // target edits go to the radar process too
@@ -25,7 +22,67 @@ $("pRange").onchange = pushSettings;
 $("tIgn").addEventListener("input", () => computeTargets());
 ["wJOn", "wJ", "wLOn", "wL", "spL", "spN", "spP", "bGap"].forEach(id => $(id).addEventListener("change", pushSettings)); $("pNear").onchange = pushSettings; $("pNearR").onchange = pushSettings;
 
-const watched = p => { const c = GC[p.group]; return c && clsOn[c]; };
+const watched = p => RA.ws.t.has(p.ship) || RA.ws.g.has(p.group);
+
+// ---------------- ship watchlist editor (popup) ----------------
+const TYPES = Object.entries(SHIPDB.types).map(([id, [g, n]]) => ({ id: +id, g: +g, n })).sort((a, b) => a.n.localeCompare(b.n));
+const GROUPS = Object.entries(SHIPDB.groups).map(([id, n]) => ({ id: +id, n, types: TYPES.filter(t => t.g === +id) })).sort((a, b) => a.n.localeCompare(b.n));
+let wlSel = 0, wlOpenG = new Set(), wlQ = "";
+function wlSummary() {
+  const on = WL.filter(l => l.on !== false);
+  $("wlSum").textContent = on.length ? on.map(l => `${l.name} (${(l.groups || []).length} classes, ${(l.types || []).length} ships)`).join(" · ") : "No watchlist enabled — nothing is watched.";
+}
+function wlSave() {
+  fetch("/settings", { method: "POST", body: JSON.stringify({ watchlists: WL }) }).catch(() => {});
+  const g = new Set(), t = new Set(); WL.filter(l => l.on !== false).forEach(l => { (l.groups || []).forEach(x => g.add(+x)); (l.types || []).forEach(x => t.add(+x)); });
+  RA.ws = { g, t }; wlSummary(); renderFeed(); drawPulses();
+}
+document.body.insertAdjacentHTML("beforeend", `<div id="wlPop"><div id="wlBox">
+  <div class="wlh"><b>Ship watchlists</b><span class="sub">Kills with these ships beep and show in the feed. Tick a whole class, or open it and pick single ships.</span><span id="wlX" title="Close">✕</span></div>
+  <div class="wlb"><div id="wlLists"></div>
+    <div id="wlRight"><input id="wlQ" type="text" placeholder="Search ships or classes…"><div id="wlTree"></div></div></div></div></div>`);
+function wlRender() {
+  if (!WL.length) WL.push({ name: "My list", on: true, groups: [], types: [] });
+  if (wlSel >= WL.length) wlSel = 0;
+  $("wlLists").innerHTML = WL.map((l, i) => `<div class="wli ${i === wlSel ? "sel" : ""}" data-i="${i}"><input type="checkbox" data-on="${i}" ${l.on !== false ? "checked" : ""} title="Enabled">
+      <input type="text" class="wln" data-n="${i}" value="${esc(l.name)}"><span class="sub">${(l.groups || []).length}c ${(l.types || []).length}s</span>${WL.length > 1 ? `<span class="wld" data-d="${i}" title="Delete list">✕</span>` : ""}</div>`).join("")
+    + `<button id="wlNew">+ New list</button>`;
+  const L = WL[wlSel], G = new Set((L.groups || []).map(Number)), T = new Set((L.types || []).map(Number)), q = wlQ.trim().toLowerCase();
+  let html = "";
+  for (const g of GROUPS) {
+    const gm = !q || g.n.toLowerCase().includes(q), ts = q && !gm ? g.types.filter(t => t.n.toLowerCase().includes(q)) : g.types;
+    if (!gm && !ts.length) continue;
+    const whole = G.has(g.id), picked = g.types.filter(t => T.has(t.id)).length, open = wlOpenG.has(g.id) || (q && !gm);
+    html += `<div class="wlg"><span class="tw" data-tw="${g.id}">${open ? "▾" : "▸"}</span><label><input type="checkbox" data-g="${g.id}" ${whole ? "checked" : ""}> <b>${esc(g.n)}</b></label>
+      <span class="sub">${whole ? "whole class" : picked ? picked + " of " + g.types.length : g.types.length + (g.types.length === 1 ? " ship" : " ships")}</span></div>`;
+    if (open) html += `<div class="wlt">` + ts.map(t => `<label class="${whole ? "dim" : ""}"><input type="checkbox" data-t="${t.id}" ${whole || T.has(t.id) ? "checked" : ""} ${whole ? "disabled" : ""}> ${esc(t.n)}</label>`).join("") + `</div>`;
+  }
+  $("wlTree").innerHTML = html || `<div class="sub">No ships match "${esc(wlQ)}".</div>`;
+}
+$("wlPop").addEventListener("click", e => {
+  const d = e.target.dataset;
+  if (e.target.id === "wlPop" || e.target.id === "wlX") { $("wlPop").classList.remove("on"); return; }
+  if (e.target.id === "wlNew") { WL.push({ name: "List " + (WL.length + 1), on: true, groups: [], types: [] }); wlSel = WL.length - 1; wlSave(); wlRender(); return; }
+  if (d.d !== undefined) { if (confirmDel(+d.d)) { WL.splice(+d.d, 1); wlSel = 0; wlSave(); wlRender(); } return; }
+  if (d.tw !== undefined) { const g = +d.tw; wlOpenG.has(g) ? wlOpenG.delete(g) : wlOpenG.add(g); wlRender(); return; }
+  const row = e.target.closest(".wli"); if (row && d.on === undefined && d.n === undefined) { wlSel = +row.dataset.i; wlRender(); }
+});
+let delArm = -1, delT = 0;
+function confirmDel(i) { if (delArm === i && Date.now() - delT < 3000) { delArm = -1; return true; } delArm = i; delT = Date.now();
+  const el = $("wlLists").querySelector(`[data-d="${i}"]`); if (el) { el.textContent = "delete?"; el.style.color = "#ff6b62"; } return false; }
+$("wlPop").addEventListener("change", e => {
+  const d = e.target.dataset, L = WL[wlSel];
+  if (d.on !== undefined) { WL[+d.on].on = e.target.checked; }
+  else if (d.n !== undefined) { WL[+d.n].name = e.target.value.trim() || "List"; }
+  else if (d.g !== undefined) { const g = +d.g, s = new Set((L.groups || []).map(Number)); e.target.checked ? s.add(g) : s.delete(g); L.groups = [...s];
+    if (e.target.checked) { const ids = new Set(GROUPS.find(x => x.id === g).types.map(t => t.id)); L.types = (L.types || []).filter(t => !ids.has(+t)); } }
+  else if (d.t !== undefined) { const t = +d.t, s = new Set((L.types || []).map(Number)); e.target.checked ? s.add(t) : s.delete(t); L.types = [...s]; }
+  else return;
+  wlSave(); wlRender();
+});
+$("wlQ").addEventListener("input", e => { wlQ = e.target.value; wlRender(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("wlPop").classList.remove("on"); });
+$("wlOpen").onclick = () => { wlRender(); $("wlPop").classList.add("on"); $("wlQ").focus(); };
 window.IGNORED = new Set();
 window.toggleIgnore = id => {
   const n = S[id].n, list = $("tIgn").value.split(/[,\n;]+/).map(t => t.trim()).filter(Boolean);
@@ -218,6 +275,7 @@ async function poll() {
     for (const e of d.events) { RA.evs.push(e); RA.last = Math.max(RA.last, e.n); }
     if (RA.evs.length > 600) RA.evs.splice(0, RA.evs.length - 600);
     $("wCnt").textContent = `${d.watchCount} systems currently watched` + (d.watchCount ? "" : " — log in and jump once so the radar knows where you are");
+    RA.ws = { g: new Set((d.watch || {}).g || []), t: new Set((d.watch || {}).t || []) };
     applyUi(d); renderApp(d); renderJump(d); RA.jump = d.jump || []; RA.jumpReach = d.jumpReach || []; RA.si = d.sysInfo || {}; window.IGNORED = new Set(d.ignoredIds || []);
     renderFeed(); renderChars(); renderLocal(); renderBest(); drawPulses(); drawHeat(); drawNodes();
   } catch (e) { $("rStatus").innerHTML = `<span style="color:#ff6b6b">Lost contact with the radar — is its window still open?</span>`; }

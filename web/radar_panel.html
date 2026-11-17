@@ -41,8 +41,9 @@
    <table id="best"></table>
    <h2>Local</h2>
    <div id="local"></div>
-   <h2>Alert on these ships</h2>
-   <div id="classes" class="cls"></div>
+   <h2>Watched ships</h2>
+   <div class="sub" id="wlSum"></div>
+   <div class="row"><button id="wlOpen">Edit ship watchlists…</button></div>
    <label class="chk"><input type="checkbox" id="pVictim" checked> Also alert when one of them is the victim</label>
    <h2>Watch range</h2>
    <div class="sub">Kills outside this range are ignored completely. Highsec and wormholes are never watched.</div>
@@ -63,6 +64,6 @@
    <div class="sub" style="margin-bottom:4px">ESI updates this once an hour, so the numbers shift on the hour.</div>
    <table id="busy"></table>
    <h2>PvP in lowsec <span id="fCount"></span></h2>
-   <label class="chk"><input type="checkbox" id="fOnly"> Only show kills with the ships above</label>
+   <label class="chk"><input type="checkbox" id="fOnly" checked> Only show kills with watched ships</label>
    <div id="feed"></div>
   </div>
