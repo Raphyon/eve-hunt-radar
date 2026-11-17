@@ -678,12 +678,63 @@ async function lookupPilot(name, at, seq = ++card.seq, readAs = null) {
     ships: pickTop(listBy(/ship/i)), systems: pickTop(listBy(/system/i)) };
   zstats.set(ch.id, { danger: st.danger, gang: st.gang, kills: st.kills, losses: st.losses });
   const sn = (seen.get(ch.id) || []).slice(0, 3).map(x => ({ role: x.role, ship: x.ship, sys: SYS[x.sys] ? SYS[x.sys].n : x.sys, t: x.t, watched: isWatched(x) }));
-  showCard({ state: "ok", at, readAs, id: ch.id, name: ch.name, corp: names.get(a.corporation_id), alli: names.get(a.alliance_id), st, seen: sn, zk: c3 === 200,
-    link: `https://zkillboard.com/character/${ch.id}/` });
+  const base = { state: "ok", at, readAs, id: ch.id, name: ch.name, corp: names.get(a.corporation_id), alli: names.get(a.alliance_id), st, seen: sn, zk: c3 === 200,
+    link: `https://zkillboard.com/character/${ch.id}/`, act: { loading: true } };
+  showCard(base);
+  const act = await recentActivity(ch.id);
+  if (seq === card.seq) showCard(Object.assign({}, base, { act }));
+}
+
+// ---- recent PvP activity: last 7 days; if none, last 30; if none, last 90.
+// zKill's character API filters "pastSeconds" up to 7 days and otherwise by calendar month, and returns IDs + hashes;
+// time / system / ship come from CCP's public killmail endpoint.
+const actCache = new Map();
+async function zkRefs(cid, filter) {
+  const out = [];
+  for (const kind of ["kills", "losses"]) {
+    const [c, b] = await get(`${ZKB}/api/${kind}/characterID/${cid}/${filter}`);
+    if (c === 200 && Array.isArray(b)) b.forEach(r => r && r.killmail_id && r.zkb && out.push({ id: r.killmail_id, hash: r.zkb.hash, value: r.zkb.totalValue || 0 }));
+    await sleep(400);                                         // be polite to zKillboard
+  }
+  return out;
+}
+async function esiKill(r) {
+  const [c, b] = await get(`${ESI}/killmails/${r.id}/${r.hash}/`);
+  return c === 200 && b ? b : null;
+}
+async function recentActivity(cid) {
+  const hit = actCache.get(cid); if (hit && Date.now() - hit.at < 15 * 60e3) return hit.v;
+  const nowMs = Date.now(), seenIds = new Set(), kms = [];
+  const monthsBack = n => { const out = []; const d = new Date(); for (let i = 0; i < n; i++) { out.push([d.getUTCFullYear(), d.getUTCMonth() + 1]); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); } return out; };
+  const steps = [[7, ["pastSeconds/604800/"]], [30, monthsBack(2).map(([y, m]) => `year/${y}/month/${m}/`)], [90, monthsBack(4).map(([y, m]) => `year/${y}/month/${m}/`)]];
+  let result = { days: 90, kills: 0, losses: 0, recent: [] };
+  for (const [days, filters] of steps) {
+    let refs = [];
+    for (const f of filters) refs = refs.concat(await zkRefs(cid, f));
+    refs = refs.filter(r => !seenIds.has(r.id)).sort((x, y) => y.id - x.id).slice(0, 30);   // newest first (IDs grow over time)
+    for (const r of refs) { seenIds.add(r.id); const km = await esiKill(r); if (km) kms.push({ km, value: r.value }); }
+    const cut = nowMs - days * 864e5;
+    const inWin = kms.filter(x => Date.parse(x.km.killmail_time) >= cut).sort((x, y) => Date.parse(y.km.killmail_time) - Date.parse(x.km.killmail_time));
+    if (inWin.length) {
+      const rows = [];
+      for (const { km, value } of inWin) {
+        const lost = km.victim && km.victim.character_id === cid;
+        const me = lost ? km.victim : (km.attackers || []).find(x => x.character_id === cid) || {};
+        const [, shipName] = await shipInfo(me.ship_type_id);
+        const s = SYS[km.solar_system_id];
+        rows.push({ t: km.killmail_time, lost, ship: shipName, sys: s ? s.n : String(km.solar_system_id), sec: s ? dispSec(s.s) : null, region: s ? s.r : null,
+          link: `https://zkillboard.com/kill/${km.killmail_id}/`, value });
+      }
+      result = { days, kills: rows.filter(r => !r.lost).length, losses: rows.filter(r => r.lost).length, more: inWin.length >= 30, recent: rows.slice(0, 5) };
+      break;
+    }
+  }
+  actCache.set(cid, { at: Date.now(), v: result });
+  return result;
 }
 function showCard(d) {
   card.data = Object.assign({ v: Date.now() }, d);
-  const W = 320, H = 360;
+  const W = 340, H = 470;
   let px = d.at || [0, 0], a = settings.localArea;
   let dip = { x: px[0], y: px[1] };
   try { if (process.platform === "win32") dip = screen.screenToDipPoint({ x: px[0], y: px[1] }); } catch { }
