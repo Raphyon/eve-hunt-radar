@@ -249,7 +249,7 @@ async function heatLoop() {
 }
 
 // ------------------------------------------------------------- best hunting spots near you
-function bestNearby(maxj = 6, n = 8) {
+function bestNearby(maxj = 15, n = 8) {
   const src = primarySys(); const origins = src ? [src] : [...parseTargets(settings.watched)];
   if (!origins.length) return [];
   const dist = new Map(); origins.forEach(o => bfs(o, maxj).forEach((v, k) => dist.set(k, Math.min(dist.get(k) ?? 99, v))));
