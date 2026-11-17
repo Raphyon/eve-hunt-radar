@@ -268,6 +268,8 @@ function applyUi(d) {
   RA.ui = d.ui; const st = d.settings;
   $("ovEdit").textContent = d.ui.edit ? "Lock overlay 🔒" : "Edit / move overlay";
   const ks = d.ui.keys || {}; $("kEditS").textContent = ks.edit === "ok" ? "✓" : ks.edit || ""; $("kModeS").textContent = ks.mode === "ok" ? "✓" : ks.mode || "";
+  const hp = d.helper; $("hlpErr").style.display = hp && hp.ok === false ? "block" : "none";
+  if (hp && hp.ok === false) $("hlpErr").textContent = "⚠ Windows helper failed, so active character, window titles and middle-click lookup are off. Copy this into a GitHub issue or send it to whoever shared the radar with you: " + hp.err;
   const sn = d.snap; $("snMsg").textContent = sn.msg ? sn.msg + " · " + agoS(sn.t) + " ago" : (st.localArea ? "Local area set." : "No Local area marked yet.");
   if (uiLoaded) return; uiLoaded = true;
   $("ovOp").value = st.overlay.opacity; $("opV").textContent = Math.round(st.overlay.opacity * 100) + "%"; $("ovJ").value = String(st.overlay.mapJumps || 4);
