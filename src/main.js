@@ -252,7 +252,7 @@ async function heatLoop() {
 }
 
 // ------------------------------------------------------------- best hunting spots near you
-function bestNearby(maxj = 15, n = 8) {
+function bestNearby(maxj = +settings.watchJumps || 20, n = 8) {   // "nearby" = the watch range (jumps)
   const src = primarySys(); const origins = src ? [src] : [...parseTargets(settings.watched)];
   if (!origins.length) return [];
   const dist = new Map(); origins.forEach(o => bfs(o, maxj).forEach((v, k) => dist.set(k, Math.min(dist.get(k) ?? 99, v))));
@@ -908,7 +908,7 @@ function statePayload(q) {
     version: VERSION, status, helper: helperStatus(), heat, heatAt, events: events.filter(e => e.n > since), alerts: alerts.filter(a => a.n > asince),
     chars: charView(), local: localView(), best: bestNearby(), localCounts, settings, chatlogs: chatlog,
     jump: jumpView().map(j => Object.assign({}, j, { inRange: undefined, inRangeCount: j.inRange.length })), jumpToons: jumpToonsView(), jumpClasses: JUMP, ignoredIds: [...ignored()], watch: { g: [...watchSets().g], t: [...watchSets().t], pg: [...watchSets().pg], pt: [...watchSets().pt] },
-    jumpReach: [...new Set(jumpView().flatMap(j => j.inRange))], watchCount: watchSet().size, sysInfo: sysInfo(),
+    jumpReach: [...new Set(jumpView().flatMap(j => j.inRange))], watchCount: watchSet().size, watchIds: [...watchSet()], sysInfo: sysInfo(),
     ui: { edit: editMode, mode: settings.overlay.mode, keys: keyStatus }, snap, now: now(), update: upd, dataDir: DATA_DIR,
   };
 }

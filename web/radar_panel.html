@@ -39,7 +39,7 @@
    <div id="chars"></div>
    <details class="sub" style="margin-top:4px"><summary>Chat log folder</summary>Found from EVE's chat logs (ESC → Chat → "Log Chat to File" must be on). Only set this if it isn't found:<input id="clDir" type="text" style="margin-top:4px"><div class="row"><button id="clSave">Save</button></div></details>
    <h2>Best nearby</h2>
-   <div class="sub" style="margin-bottom:4px">Lowsec and nullsec within 15 jumps of the character you're flying, ranked by ratting (NPC kills/h), recent watched-ship kills and PvP.</div>
+   <div class="sub" style="margin-bottom:4px">Lowsec and nullsec within your watch range (jumps) of the character you're flying, ranked by ratting (NPC kills/h), recent watched-ship kills and PvP.</div>
    <table id="best"></table>
    <h2>Local</h2>
    <div id="local"></div>
@@ -62,5 +62,5 @@
    <label>At most one beep every <select id="bGap" style="width:auto;display:inline"><option value="0">0</option><option value="5">5</option><option selected value="10">10</option><option value="20">20</option><option value="30">30</option></select> seconds</label>
    <label>Heat (ESI, last hour)</label>
    <select id="heatMode"><option value="off">Off</option><option value="j">Jumps</option><option value="k">Ship kills</option><option value="n" selected>NPC kills (ratting)</option></select>
-   <div class="sub">Ranks lowsec (0.1–0.4) within 15 jumps of your characters: top 3 red, 4–10 orange. ESI updates once an hour.</div>
+   <div class="sub">Ranks lowsec and nullsec separately, inside your watch range: top 3 red, 4–10 orange. ESI updates once an hour.</div>
   </div>

@@ -86,7 +86,7 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
 <body>
 <div id="wrap">
  <div id="map">
-  <svg id="svg"><g id="vp"><g id="gRegions"></g><g id="gHeat"></g><g id="gEdges"></g><g id="gStubs"></g><g id="gPulse"></g><g id="gNodes"></g></g></svg>
+  <svg id="svg"><g id="vp"><g id="gRegions"></g><g id="gHeat"></g><g id="gEdges"></g><g id="gStubs"></g><g id="gPulse"></g><g id="gNodes"></g><g id="gHot"></g></g></svg>
   <input id="search" type="text" placeholder="Find system… (Enter)">
   <div id="sysPop"></div>
   <div id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="fit">Fit</button><button id="legBtn" title="Legend">ⓘ Legend</button></div>
@@ -252,9 +252,9 @@ function drawNodes() {
       if (k === "camp" || k === "hunt") el("path", { d: D[k].join(""), fill: "none", stroke: k === "camp" ? "#ff3b3b" : "#ffb020", "stroke-width": 9 }, g);
       else el("path", { d: D[k].join(""), fill: secColours ? "#59626c" : NODE[c][1], "fill-opacity": f ? .3 : .95 }, g);
     }
-    built = "far"; drawEdges();
+    built = "far"; drawEdges(); drawHotFar();
   } else {
-    const R = viewRect(.6); built = R; drawEdges(R);
+    const R = viewRect(.6); built = R; drawEdges(R); $("gHot").innerHTML = "";
     DATA.sys.forEach(s => {
       if (s.px < R.x0 || s.px > R.x1 || s.py < R.y0 || s.py > R.y1) return;
       const grp = el("g", { class: "nd", transform: `translate(${s.px},${s.py})` }, g);
@@ -275,11 +275,18 @@ function drawNodes() {
   }
   if (flashId) flash(flashId);
 }
+// zoomed out: heat-ranked systems as fixed-size markers on top (top 3 red, 4-10 orange), redrawn on zoom so they stay visible
+function drawHotFar() {
+  const g = $("gHot"); g.innerHTML = ""; if (view.k >= NEAR || !RA.hr || RA.hr.m === "off") return;
+  RA.hr.list.forEach(([s]) => { const r = RA.hr.rank[s.id]; if (r > 10 || (window.IGNORED && window.IGNORED.has(s.id))) return;
+    el("circle", { cx: s.px, cy: s.py, r: (r <= 3 ? 6.5 : 5) / view.k, fill: r <= 3 ? "#ff3b30" : "#ff9a2b", stroke: "#0d1014", "stroke-width": 2 / view.k }, g); });
+}
 // after a pan/zoom: rebuild only when we switched far<->near or moved outside the built area
 let recullT = null;
 function recullSoon() { clearTimeout(recullT); recullT = setTimeout(() => {
   const far = view.k < NEAR;
   if (far !== (built === "far")) return drawNodes();
+  if (far) drawHotFar();
   if (!far && built) { const r = viewRect(0); if (r.x0 < built.x0 || r.y0 < built.y0 || r.x1 > built.x1 || r.y1 > built.y1) drawNodes(); }
 }, 90); }
 // zoomed out: a click picks the nearest system

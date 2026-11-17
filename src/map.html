@@ -86,7 +86,7 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
 <body>
 <div id="wrap">
  <div id="map">
-  <svg id="svg"><g id="vp"><g id="gRegions"></g><g id="gHeat"></g><g id="gEdges"></g><g id="gStubs"></g><g id="gPulse"></g><g id="gNodes"></g></g></svg>
+  <svg id="svg"><g id="vp"><g id="gRegions"></g><g id="gHeat"></g><g id="gEdges"></g><g id="gStubs"></g><g id="gPulse"></g><g id="gNodes"></g><g id="gHot"></g></g></svg>
   <input id="search" type="text" placeholder="Find system… (Enter)">
   <div id="sysPop"></div>
   <div id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="fit">Fit</button><button id="legBtn" title="Legend">ⓘ Legend</button></div>
@@ -148,7 +148,7 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
    <div id="chars"></div>
    <details class="sub" style="margin-top:4px"><summary>Chat log folder</summary>Found from EVE's chat logs (ESC → Chat → "Log Chat to File" must be on). Only set this if it isn't found:<input id="clDir" type="text" style="margin-top:4px"><div class="row"><button id="clSave">Save</button></div></details>
    <h2>Best nearby</h2>
-   <div class="sub" style="margin-bottom:4px">Lowsec and nullsec within 15 jumps of the character you're flying, ranked by ratting (NPC kills/h), recent watched-ship kills and PvP.</div>
+   <div class="sub" style="margin-bottom:4px">Lowsec and nullsec within your watch range (jumps) of the character you're flying, ranked by ratting (NPC kills/h), recent watched-ship kills and PvP.</div>
    <table id="best"></table>
    <h2>Local</h2>
    <div id="local"></div>
@@ -171,7 +171,7 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
    <label>At most one beep every <select id="bGap" style="width:auto;display:inline"><option value="0">0</option><option value="5">5</option><option selected value="10">10</option><option value="20">20</option><option value="30">30</option></select> seconds</label>
    <label>Heat (ESI, last hour)</label>
    <select id="heatMode"><option value="off">Off</option><option value="j">Jumps</option><option value="k">Ship kills</option><option value="n" selected>NPC kills (ratting)</option></select>
-   <div class="sub">Ranks lowsec (0.1–0.4) within 15 jumps of your characters: top 3 red, 4–10 orange. ESI updates once an hour.</div>
+   <div class="sub">Ranks lowsec and nullsec separately, inside your watch range: top 3 red, 4–10 orange. ESI updates once an hour.</div>
   </div>
 
   <h1>New Eden</h1>
@@ -325,9 +325,9 @@ function drawNodes() {
       if (k === "camp" || k === "hunt") el("path", { d: D[k].join(""), fill: "none", stroke: k === "camp" ? "#ff3b3b" : "#ffb020", "stroke-width": 9 }, g);
       else el("path", { d: D[k].join(""), fill: secColours ? "#59626c" : NODE[c][1], "fill-opacity": f ? .3 : .95 }, g);
     }
-    built = "far"; drawEdges();
+    built = "far"; drawEdges(); drawHotFar();
   } else {
-    const R = viewRect(.6); built = R; drawEdges(R);
+    const R = viewRect(.6); built = R; drawEdges(R); $("gHot").innerHTML = "";
     DATA.sys.forEach(s => {
       if (s.px < R.x0 || s.px > R.x1 || s.py < R.y0 || s.py > R.y1) return;
       const grp = el("g", { class: "nd", transform: `translate(${s.px},${s.py})` }, g);
@@ -348,11 +348,18 @@ function drawNodes() {
   }
   if (flashId) flash(flashId);
 }
+// zoomed out: heat-ranked systems as fixed-size markers on top (top 3 red, 4-10 orange), redrawn on zoom so they stay visible
+function drawHotFar() {
+  const g = $("gHot"); g.innerHTML = ""; if (view.k >= NEAR || !RA.hr || RA.hr.m === "off") return;
+  RA.hr.list.forEach(([s]) => { const r = RA.hr.rank[s.id]; if (r > 10 || (window.IGNORED && window.IGNORED.has(s.id))) return;
+    el("circle", { cx: s.px, cy: s.py, r: (r <= 3 ? 6.5 : 5) / view.k, fill: r <= 3 ? "#ff3b30" : "#ff9a2b", stroke: "#0d1014", "stroke-width": 2 / view.k }, g); });
+}
 // after a pan/zoom: rebuild only when we switched far<->near or moved outside the built area
 let recullT = null;
 function recullSoon() { clearTimeout(recullT); recullT = setTimeout(() => {
   const far = view.k < NEAR;
   if (far !== (built === "far")) return drawNodes();
+  if (far) drawHotFar();
   if (!far && built) { const r = viewRect(0); if (r.x0 < built.x0 || r.y0 < built.y0 || r.x1 > built.x1 || r.y1 > built.y1) drawNodes(); }
 }, 90); }
 // zoomed out: a click picks the nearest system
@@ -629,12 +636,13 @@ function drawPulses() {
 function heatVal(r, m) { return !r ? 0 : m === "j" ? r[0] : m === "k" ? r[1] + r[2] : r[3]; }
 function heatRank() {
   const m = $("heatMode").value; if (m === "off") return { m, rank: {}, list: [] };
-  // lowsec only (0.1-0.4), within 15 jumps of your running characters, so the colours mean something where you are
-  const origins = RA.chars.filter(c => c.running && S[c.sys]).map(c => c.sys), near = {};
-  const q = [...origins]; origins.forEach(o => near[o] = 0);
-  while (q.length) { const u = q.shift(); if (near[u] >= 15) continue; ADJ[u].forEach(v => { if (near[v] === undefined) { near[v] = near[u] + 1; q.push(v); } }); }
-  const list = DATA.sys.filter(s => { const d = dispSec(s.s); return d > 0 && d < 0.5 && !window.IGNORED.has(s.id) && (!origins.length || near[s.id] !== undefined); }).map(s => [s, heatVal(RA.heat[s.id], m)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
-  const rank = {}; list.forEach((x, i) => rank[x[0].id] = i + 1);
+  // inside your watch range (gate jumps from your characters / LY from jump toons, as set under Watch range);
+  // lowsec and nullsec ranked SEPARATELY (null ratting numbers would drown lowsec)
+  const W = RA.watchIds && RA.watchIds.size ? RA.watchIds : null;
+  const band = s => { const d = dispSec(s.s); return d >= 0.5 ? null : d > 0 ? "low" : "null"; };
+  const all = DATA.sys.filter(s => band(s) && !window.IGNORED.has(s.id) && (!W || W.has(s.id))).map(s => [s, heatVal(RA.heat[s.id], m)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+  const rank = {}, list = [], seen = { low: 0, null: 0 };
+  all.forEach(x => { const b = band(x[0]); rank[x[0].id] = ++seen[b]; list.push(x); });
   return { m, rank, list };
 }
 const tierCol = r => r && r <= 3 ? "#ff3b30" : r && r <= 10 ? "#ff9a2b" : "#3a424b";
@@ -659,7 +667,7 @@ function drawHeat() {
   const defs = el("defs", {}, g);
   [["hgR", "#ff3b30"], ["hgO", "#ff9a2b"]].forEach(([id, c]) => { const gr = el("radialGradient", { id }, defs);
     el("stop", { offset: "0%", "stop-color": c, "stop-opacity": .8 }, gr); el("stop", { offset: "50%", "stop-color": c, "stop-opacity": .35 }, gr); el("stop", { offset: "100%", "stop-color": c, "stop-opacity": 0 }, gr); });
-  H.list.slice(0, 10).forEach(([s], i) => el("circle", { cx: s.px, cy: s.py, r: i < 3 ? 85 : 60, fill: i < 3 ? "url(#hgR)" : "url(#hgO)" }, g));
+  H.list.filter(([s]) => H.rank[s.id] <= 10).forEach(([s]) => { const top = H.rank[s.id] <= 3; el("circle", { cx: s.px, cy: s.py, r: top ? 85 : 60, fill: top ? "url(#hgR)" : "url(#hgO)" }, g); });
 }
 $("heatMode").onchange = () => { drawHeat(); drawNodes(); };
 
@@ -755,7 +763,7 @@ async function poll() {
     if (RA.evs.length > 600) RA.evs.splice(0, RA.evs.length - 600);
     $("wCnt").textContent = `${d.watchCount} systems currently watched` + (d.watchCount ? "" : " — log in and jump once so the radar knows where you are");
     RA.ws = { g: new Set((d.watch || {}).g || []), t: new Set((d.watch || {}).t || []) };
-    applyUi(d); renderApp(d); renderJump(d); RA.jump = d.jump || []; RA.jumpReach = d.jumpReach || []; RA.si = d.sysInfo || {}; window.IGNORED = new Set(d.ignoredIds || []);
+    applyUi(d); renderApp(d); renderJump(d); RA.jump = d.jump || []; RA.jumpReach = d.jumpReach || []; RA.si = d.sysInfo || {}; RA.watchIds = new Set(d.watchIds || []); window.IGNORED = new Set(d.ignoredIds || []);
     renderFeed(); renderChars(); renderLocal(); renderBest(); drawPulses(); drawHeat();
     // nodes are 5k+ elements: only rebuild when what they show changed (Local counts, ignore list)
     const sig = JSON.stringify([RA.lc, [...window.IGNORED].sort(), Math.floor(Date.now() / 300000), RA.chars.filter(c => c.running).map(c => c.sys), RA.hr && RA.hr.list.slice(0, 40).map(x => x[0].id)]);

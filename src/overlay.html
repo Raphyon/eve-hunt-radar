@@ -202,10 +202,11 @@ function drawMini(d, me) {
   const inSet = new Set(ids);
   // heat glow: top-10 lowsec by NPC kills (ratting) across the area
   const IGN = new Set((d.ignoredIds || []));
-  const H = d.heat || {}; const rank = ids.map(i => S[i]).filter(s => dispSec(s.s) > 0 && dispSec(s.s) < .5 && !IGN.has(s.id) && H[s.id] && H[s.id][3] > 0).sort((a, b) => H[b.id][3] - H[a.id][3]).slice(0, 10);
+  const H = d.heat || {}; const hot = b => ids.map(i => S[i]).filter(s => (b === "low" ? dispSec(s.s) > 0 && dispSec(s.s) < .5 : dispSec(s.s) <= 0) && !IGN.has(s.id) && H[s.id] && H[s.id][3] > 0).sort((a, b) => H[b.id][3] - H[a.id][3]).slice(0, 10);
+  const rank = [], tier = {}; ["low", "null"].forEach(b => hot(b).forEach((s, i) => { rank.push(s); tier[s.id] = i; }));   // lowsec and nullsec ranked separately
   const defs = el("defs", {}, svg);
   [["gR", "#ff3b30"], ["gO", "#ff9a2b"]].forEach(([id, c]) => { const g = el("radialGradient", { id }, defs); el("stop", { offset: "0%", "stop-color": c, "stop-opacity": .75 }, g); el("stop", { offset: "100%", "stop-color": c, "stop-opacity": 0 }, g); });
-  rank.forEach((s, i) => { if (inSet.has(s.id)) { const [x, y] = P(s.id); el("circle", { cx: x, cy: y, r: (i < 3 ? 30 : 21), fill: `url(#${i < 3 ? "gR" : "gO"})` }, svg); } });
+  rank.forEach(s => { if (inSet.has(s.id)) { const [x, y] = P(s.id), i = tier[s.id]; el("circle", { cx: x, cy: y, r: (i < 3 ? 30 : 21), fill: `url(#${i < 3 ? "gR" : "gO"})` }, svg); } });
   // gates
   DATA.gates.forEach(([a, b]) => { if (inSet.has(a) && inSet.has(b)) { const [ax, ay] = P(a), [bx, by] = P(b); el("line", { x1: ax, y1: ay, x2: bx, y2: by, stroke: "#5b636d", "stroke-width": 1.2 * k, "stroke-opacity": .9 }, svg); } });
   // kill pulses (30 min)
@@ -213,7 +214,7 @@ function drawMini(d, me) {
   for (const sid in by) { const [x, y] = P(+sid), o = by[sid], op = Math.max(.25, 1 - o.m / 30); el("circle", { cx: x, cy: y, r: (o.h ? 15 : 12) * k, fill: o.h ? "#ff3bd4" : "none", "fill-opacity": o.h ? op * .25 : 0, stroke: o.h ? "#ff3bd4" : "#d0d7de", "stroke-width": (o.h ? 2.5 : 1.5) * k, "stroke-opacity": op }, svg); }
   // systems
   const camp = new Set((d.settings.watched || "").split(/[,\n;]+/).map(t => t.trim().toLowerCase()));
-  const charSys = new Set(d.chars.filter(c => c.running).map(c => c.sys)), heatRk = {}; rank.forEach((s, i) => heatRk[s.id] = i);
+  const charSys = new Set(d.chars.filter(c => c.running).map(c => c.sys)), heatRk = {}; rank.forEach(s => heatRk[s.id] = tier[s.id]);
   const cls = id => { const v = dispSec(S[id].s); return v >= .5 ? "h" : v > 0 ? "l" : "n"; };
   const boxes = [];                                         // occupied areas: nodes + labels already placed
   const hit = b => b[0] < 2 || b[2] > W - 2 || b[1] < 1 || b[3] > Hh - 1 || boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
