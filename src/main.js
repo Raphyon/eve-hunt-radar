@@ -56,7 +56,7 @@ const DEFAULTS = {
   // v10: watch range (kills outside are dropped before any lookup) and space bands
   watchJumpsOn: true, watchJumps: 20, watchLyOn: true, watchLy: 16, space: { low: true, null: true, poch: true }, beepGap: 10,
   keyEdit: "Ctrl+Shift+O", keyMode: "Ctrl+Shift+M",
-  snapOn: false, keySnap: "Scrolllock", snapMode: "Screenshot", localArea: null, lookupOn: true,
+  localArea: null, lookupOn: true,
   jumpToons: {},                 // (unused since v9.3, kept for old settings files)
   autostart: false,
   esiClientId: "",               // optional: EVE developer app client ID, only for reading ship type
@@ -416,32 +416,6 @@ function cleanOcrLine(l) {
   let t = l.trim().replace(/^[^A-Za-z0-9]+/, "").replace(/[^A-Za-z0-9 '.\-]/g, "").replace(/\s{2,}/g, " ").trim();
   return NAME_RE.test(t) ? t : null;
 }
-async function snapshotLocal() {
-  const a = settings.localArea;
-  if (!a) { Object.assign(snap, { msg: "Mark the Local area first", t: now() }); return; }
-  if (snap.busy) return;
-  Object.assign(snap, { busy: true, msg: "reading Local…", t: now() });
-  try {
-    const png = path.join(os.tmpdir(), "hunt_radar_local.png");
-    const j = await helperCmd(`OCR ${a.map(v => Math.round(v)).join(" ")} ${png}`, 20000);
-    if (j.error) throw new Error(j.error);
-    const lines = Array.isArray(j.lines) ? j.lines : (j.lines ? [j.lines] : []);
-    const nm = [...new Set(lines.map(cleanOcrLine).filter(Boolean))];
-    if (!nm.length) { Object.assign(snap, { msg: `OCR found no names — is the box on the member list?`, t: now() }); return; }
-    await analyseLocal(nm, "snapshot");
-    const matched = local.pilots.length, miss = nm.length - matched;
-    Object.assign(snap, { msg: `snapshot: ${matched} pilots` + (miss > 0 ? `, ${miss} misread` : ""), t: now() });
-  } catch (e) { Object.assign(snap, { msg: "snapshot failed: " + String(e.message).slice(0, 120), t: now() }); }
-  finally { snap.busy = false; }
-}
-async function onSnapKey() {
-  if (settings.snapMode === "Ctrl+A, Ctrl+C") {
-    const w = await eveWindows();
-    if (!w || !w.fg) { Object.assign(snap, { msg: "no EVE window in front — nothing sent", t: now() }); return; }
-    const j = await helperCmd("KEYS", 3000);
-    Object.assign(snap, { msg: j.error ? "keys failed: " + j.error : "sent Ctrl+A, Ctrl+C", t: now() });
-  } else await snapshotLocal();
-}
 let lastClip = null, clipBusy = false;
 async function pollClipboard() {
   if (clipBusy) return; clipBusy = true;
@@ -728,7 +702,7 @@ async function recentActivity(cid) {
         rows.push({ t: km.killmail_time, lost, ship: victimShip, type: vt || null, flying: lost ? null : shipName, sysId: km.solar_system_id, n: (km.attackers || []).length, sys: s ? s.n : String(km.solar_system_id), sec: s ? dispSec(s.s) : null, region: s ? s.r : null,
           link: `https://zkillboard.com/kill/${km.killmail_id}/`, value });
       }
-      result = { days, kills: rows.filter(r => !r.lost).length, losses: rows.filter(r => r.lost).length, more: inWin.length >= 30, recent: rows.slice(0, 5) };
+      result = { days, kills: rows.filter(r => !r.lost).length, losses: rows.filter(r => r.lost).length, more: inWin.length >= 30, recent: rows.slice(0, 3) };
       break;
     }
   }
@@ -822,7 +796,7 @@ function savePickedArea(r) {
   let rect = { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.w), height: Math.round(r.h) };
   if (process.platform === "win32") { try { rect = screen.dipToScreenRect(null, rect); } catch { } }
   settings.localArea = [rect.x, rect.y, rect.width, rect.height]; saveSettings(); syncHook();
-  Object.assign(snap, { msg: "Local area saved — press " + settings.keySnap, t: now() });
+  Object.assign(snap, { msg: "Local area saved — middle-click a name in Local", t: now() });
   if (pickWin && !pickWin.isDestroyed()) pickWin.close();
 }
 function trayIcon() {
@@ -836,7 +810,7 @@ function updateTray() {
     { label: "Open map & settings", click: openMap },
     { label: editMode ? `Lock overlay  (${settings.keyEdit})` : `Edit / move overlay  (${settings.keyEdit})`, click: () => setEdit(!editMode) },
     { label: settings.overlay.mode === "map" ? `Switch to strip  (${settings.keyMode})` : `Switch to mini-map  (${settings.keyMode})`, click: () => setMode(settings.overlay.mode === "map" ? "strip" : "map") },
-    { label: "Mark Local area for snapshots", click: pickArea },
+    { label: "Mark Local area (middle-click lookup)", click: pickArea },
     ...(upd.state === "ready" ? [{ label: `Restart to update to v${upd.version}`, click: () => { app.isQuitting = true; autoUpdater.quitAndInstall(false, true); } }] : [{ label: "Check for updates", enabled: !!(app.isPackaged && autoUpdater), click: () => autoUpdater.checkForUpdates().catch(() => { }) }]),
     { type: "separator" },
     { label: "Quit", click: () => app.quit() },
@@ -849,7 +823,6 @@ function registerKeys() {
   const reg = (name, acc, fn) => { if (!acc) return; let ok = false; try { ok = globalShortcut.register(acc, fn); } catch { } keyStatus[name] = ok ? "ok" : `${acc} is taken or invalid`; };
   reg("edit", settings.keyEdit, () => setEdit(!editMode));
   reg("mode", settings.keyMode, () => setMode(settings.overlay.mode === "map" ? "strip" : "map"));
-  if (settings.snapOn) reg("snap", settings.keySnap, () => onSnapKey()); else keyStatus.snap = "off";
 }
 
 // ------------------------------------------------------------- updates (GitHub Releases), autostart, import
@@ -937,7 +910,7 @@ function startServer() {
       if (u.pathname === "/settings") {
         for (const k in j) if (SETTABLE.has(k)) settings[k] = k === "overlay" ? Object.assign({}, settings.overlay, j[k]) : j[k];
         saveSettings();
-        if (["keyEdit", "keyMode", "keySnap", "snapOn"].some(k => k in j)) registerKeys();
+        if (["keyEdit", "keyMode"].some(k => k in j)) registerKeys();
         if (["lookupOn", "localArea"].some(k => k in j)) syncHook();
         if ("autostart" in j) applyAutostart();
         if ("overlay" in j && overlay) { overlay.setBounds(overlayBounds()); }
@@ -950,7 +923,7 @@ function startServer() {
         else if (c === "mode") setMode(j.mode || (settings.overlay.mode === "map" ? "strip" : "map"));
         else if (c === "pick") pickArea(); else if (c === "picked") savePickedArea(j.rect);
         else if (c === "pickcancel") { if (pickWin && !pickWin.isDestroyed()) pickWin.close(); }
-        else if (c === "snap") onSnapKey(); else if (c === "quit") app.quit();
+        else if (c === "quit") app.quit();
         else if (c === "cardclose") hideCard();
         else if (c === "cardhold") { clearTimeout(card.timer); if (!j.on && card.data && card.data.state === "ok") card.timer = setTimeout(hideCard, 8000); }
         else if (c === "esilogin") openLogin();
