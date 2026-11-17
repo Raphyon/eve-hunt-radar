@@ -155,7 +155,12 @@ function drawMini(d, me) {
   const J = d.settings.overlay.mapJumps || 4;
   let center = me && S[me.sys] ? me.sys : null;
   if (!center) { const t = (d.settings.watched || "").split(",")[0].trim().toLowerCase(); const s = DATA.sys.find(x => x.n.toLowerCase() === t); center = s ? s.id : DATA.sys[0].id; }
-  const dist = bfs(center, J); const ids = Object.keys(dist).map(Number);
+  // walk the gates, but don't go on through highsec (a highsec system next to low/null shows as a dot, no further)
+  const walk = maxd => { const d = { [center]: 0 }, q = [center]; while (q.length) { const u = q.shift(); if (d[u] >= maxd || (u !== center && dispSec(S[u].s) >= .5)) continue; for (const v of ADJ[u]) if (d[v] === undefined) { d[v] = d[u] + 1; q.push(v); } } return d; };
+  // fit to the panel: about one system per 30x22 px; shrink the radius (shown as "r 5→3") rather than pile systems up
+  const cap = Math.max(12, (Math.max(svg.clientWidth, 120) * Math.max(svg.clientHeight, 100)) / 660);
+  let Jr = J, dist = walk(Jr); while (Jr > 1 && Object.keys(dist).length > cap) dist = walk(--Jr);
+  const ids = Object.keys(dist).map(Number);
   const pos = miniLayout(center, ids);
   // fill the panel: stretch x and y independently into pixel space (labels stay crisp, no wasted margins)
   const W = Math.max(svg.clientWidth, 120), Hh = Math.max(svg.clientHeight, 100), mx = 30, myT = 18, myB = 12;
@@ -168,8 +173,23 @@ function drawMini(d, me) {
   const p2 = U.p2 && ids.every(id => U.p2[id]);
   const nx = squeeze(ids.map(i => pos[i][0]), p2 ? 68 : 1e9), ny = squeeze(ids.map(i => pos[i][1]), p2 ? 50 : 1e9);
   const PP = {}; ids.forEach((i, k) => PP[i] = [mx + nx[k] * (W - 2 * mx), myT + ny[k] * (Hh - myT - myB)]);
+  // push apart systems that landed on top of each other (short, wide panels squash the rows together)
+  const MIN = 17;
+  for (let it = 0; it < 80; it++) {
+    let moved = false;
+    for (let a = 0; a < ids.length; a++) for (let b = a + 1; b < ids.length; b++) {
+      const A = PP[ids[a]], B = PP[ids[b]]; let dx = B[0] - A[0], dy = B[1] - A[1], dd = Math.hypot(dx, dy);
+      if (dd >= MIN) continue; moved = true;
+      if (dd < .01) { dx = 1; dy = .3; dd = Math.hypot(dx, dy); }
+      const push = (MIN - dd) / 2 + .2, ux = dx / dd, uy = dy / dd;
+      A[0] -= ux * push; A[1] -= uy * push; B[0] += ux * push; B[1] += uy * push;
+    }
+    ids.forEach(i => { PP[i][0] = Math.min(W - 10, Math.max(10, PP[i][0])); PP[i][1] = Math.min(Hh - 8, Math.max(10, PP[i][1])); });
+    if (!moved) break;
+  }
   const P = id => PP[id];
   svg.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
+  if (Jr < J) { const n = el("text", { x: W - 6, y: Hh - 4, "text-anchor": "end", "font-size": 9.5, fill: "#7f8a96" }, svg); n.textContent = `r ${J}→${Jr} (panel too small)`; }
   const k = 1;
   const inSet = new Set(ids);
   // heat glow: top-10 lowsec by NPC kills (ratting) across the area
@@ -185,14 +205,33 @@ function drawMini(d, me) {
   for (const sid in by) { const [x, y] = P(+sid), o = by[sid], op = Math.max(.25, 1 - o.m / 30); el("circle", { cx: x, cy: y, r: (o.h ? 15 : 12) * k, fill: o.h ? "#ff3bd4" : "none", "fill-opacity": o.h ? op * .25 : 0, stroke: o.h ? "#ff3bd4" : "#d0d7de", "stroke-width": (o.h ? 2.5 : 1.5) * k, "stroke-opacity": op }, svg); }
   // systems
   const camp = new Set((d.settings.watched || "").split(/[,\n;]+/).map(t => t.trim().toLowerCase()));
+  const charSys = new Set(d.chars.filter(c => c.running).map(c => c.sys)), heatRk = {}; rank.forEach((s, i) => heatRk[s.id] = i);
+  const cls = id => { const v = dispSec(S[id].s); return v >= .5 ? "h" : v > 0 ? "l" : "n"; };
+  const boxes = [];                                         // occupied areas: nodes + labels already placed
+  const hit = b => b[0] < 2 || b[2] > W - 2 || b[1] < 1 || b[3] > Hh - 1 || boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
+  ids.forEach(id => { const [x, y] = P(id), r = cls(id) === "h" ? 4 : 7; boxes.push([x - r, y - r, x + r, y + r]); });
   ids.forEach(id => {
-    const s = S[id], [x, y] = P(id), low = dispSec(s.s) < .5;
-    if (IGN.has(id)) { el("circle", { cx: x, cy: y, r: 5, fill: "#2a2f36", stroke: "#4a535d", "stroke-width": 1 }, svg); const t = el("text", { x, y: y - 8, "text-anchor": "middle", "font-size": 10, fill: "#5b636d" }, svg); t.textContent = s.n; return; }
-    const nul = dispSec(s.s) <= 0;      // nullsec: dark red, lowsec: orange, highsec: grey
-    el("circle", { cx: x, cy: y, r: 6, fill: nul ? "#8e2a30" : low ? "#c46a22" : "#3a424b", stroke: camp.has(s.n.toLowerCase()) ? "#ff3b30" : nul ? "#c0444c" : low ? "#e0863a" : "#59626c", "stroke-width": (camp.has(s.n.toLowerCase()) ? 2.2 : 1) * k }, svg);
-    const t = el("text", { x, y: y - 9, "text-anchor": "middle", "font-size": id === center ? 13 : 11.5, "font-weight": id === center ? 800 : 600, fill: nul ? "#eab0b4" : low ? "#f2c7a0" : "#9aa4ae", "paint-order": "stroke", stroke: "rgba(10,13,17,.9)", "stroke-width": 3 * k }, svg); t.textContent = s.n;
-    const lc = d.localCounts[id]; if (lc && Date.now() / 1000 - lc[1] < 1800) { const tt = el("text", { x: x + 8 * k, y: y + 12 * k, "font-size": 9.5 * k, "font-weight": 800, fill: "#3ddc84" }, svg); tt.textContent = "👥" + lc[0]; }
-    const hh = H[id]; if (hh && hh[3] && low) { const tt = el("text", { x: x - 8 * k, y: y + 12 * k, "text-anchor": "end", "font-size": 9 * k, "font-weight": 700, fill: "#ffb38a" }, svg); tt.textContent = hh[3]; }
+    const s = S[id], [x, y] = P(id), c = cls(id);
+    if (IGN.has(id)) { el("circle", { cx: x, cy: y, r: 4, fill: "#2a2f36", stroke: "#4a535d", "stroke-width": 1 }, svg); return; }
+    const watched = camp.has(s.n.toLowerCase());
+    if (c === "h" && !watched && id !== center) { el("circle", { cx: x, cy: y, r: 3.5, fill: "#4a525c" }, svg); return; }
+    el("circle", { cx: x, cy: y, r: 6, fill: c === "n" ? "#8e2a30" : c === "l" ? "#c46a22" : "#3a424b", stroke: watched ? "#ff3b30" : c === "n" ? "#c0444c" : c === "l" ? "#e0863a" : "#59626c", "stroke-width": watched ? 2.2 : 1 }, svg);
+  });
+  // labels: most important first; each tries above / below / right / left and is skipped if there's no room
+  const prio = id => id === center ? 0 : charSys.has(id) ? 1 : camp.has(S[id].n.toLowerCase()) ? 2 : by[id] ? 3 : heatRk[id] != null ? 4 + heatRk[id] / 10 : cls(id) === "h" ? 99 : 20;
+  ids.filter(id => !IGN.has(id) && prio(id) < 99).sort((a, b) => prio(a) - prio(b)).forEach(id => {
+    const s = S[id], [x, y] = P(id), big = id === center, fs = big ? 13 : 11.5, w = s.n.length * fs * .58 + 2, h = fs;
+    const spots = [[x, y - 9, "middle", [x - w / 2, y - 9 - h, x + w / 2, y - 8]], [x, y + 9 + h * .8, "middle", [x - w / 2, y + 8, x + w / 2, y + 9 + h]],
+      [x + 9, y + h * .35, "start", [x + 8, y - h / 2, x + 9 + w, y + h / 2]], [x - 9, y + h * .35, "end", [x - 9 - w, y - h / 2, x - 8, y + h / 2]]];
+    const spot = spots.find(sp => !hit(sp[3])) || (big ? spots[0] : null); if (!spot) return;
+    boxes.push(spot[3]);
+    const c = cls(id), t = el("text", { x: spot[0], y: spot[1], "text-anchor": spot[2], "font-size": fs, "font-weight": big ? 800 : 600, fill: c === "n" ? "#eab0b4" : c === "l" ? "#f2c7a0" : "#9aa4ae", "paint-order": "stroke", stroke: "rgba(10,13,17,.9)", "stroke-width": 3 }, svg); t.textContent = s.n;
+  });
+  // small badges (Local count, ratting) only where they fit
+  ids.forEach(id => {
+    const [x, y] = P(id);
+    const lc = d.localCounts[id]; if (lc && Date.now() / 1000 - lc[1] < 1800) { const b = [x + 6, y + 3, x + 30, y + 14]; if (!hit(b)) { boxes.push(b); const tt = el("text", { x: x + 7, y: y + 13, "font-size": 9.5, "font-weight": 800, fill: "#3ddc84" }, svg); tt.textContent = "👥" + lc[0]; } }
+    const hh = H[id]; if (hh && hh[3] && heatRk[id] != null) { const tw = String(hh[3]).length * 5.6, b = [x - 7 - tw, y + 3, x - 6, y + 13]; if (!hit(b)) { boxes.push(b); const tt = el("text", { x: x - 7, y: y + 12, "text-anchor": "end", "font-size": 9, "font-weight": 700, fill: "#ffb38a" }, svg); tt.textContent = hh[3]; } }
   });
   // jump range: violet ring on lowsec systems within range of any jump toon
   const inR = new Set(d.jumpReach || []);
