@@ -24,14 +24,12 @@ html,body{margin:0;height:100%;background:transparent;overflow:hidden;font:12px/
 .pill.hot{background:rgba(255,59,212,.22);color:#ffd2f5}
 .pill.near{background:rgba(255,59,48,.25);color:#ffd7d4}
 .mut{color:var(--mut)}
-#line2{height:26px;font-size:12px;border-top:1px solid rgba(255,255,255,.06)}
 .al{font-weight:700}.al.w{color:var(--pnk)}.al.n{color:#ff6b62}
 #jump{display:none;min-height:24px;font-size:12px;border-top:1px solid rgba(255,255,255,.06);flex-wrap:wrap;row-gap:2px;padding-top:3px;padding-bottom:3px;white-space:normal}
 #jump.on{display:flex}
 .jt{color:#c4b5fd;font-weight:700}.ok{color:#3ddc84;font-weight:700}.no{color:#ff6b62;font-weight:700}
 #mm{display:none;flex:1;min-height:0}
 #wrap.map #mm{display:block}
-#wrap.map #line2{display:none}
 svg{width:100%;height:100%;display:block}
 #alist{display:none;padding:3px 10px 5px;border-top:1px solid rgba(255,255,255,.06);font-size:11.5px;max-height:58px;overflow:hidden}
 #wrap.map #alist{display:block}
@@ -46,7 +44,6 @@ svg{width:100%;height:100%;display:block}
   <div id="bar"><b>EDIT</b><span>drag to move · resize from the edges</span><span class="sp"></span>
     <button id="bMode" title="Hide the mini-map (show it again with the hotkey or the tray icon)">Hide</button><button id="bMap">Map & settings</button><button id="bLock">Lock 🔒</button></div>
   <div id="top" class="row"></div>
-  <div id="line2" class="row"></div>
   <div id="mm"><svg id="svg"></svg></div>
   <div id="jump" class="row"></div>
   <div id="alist"></div>
@@ -110,14 +107,6 @@ function render() {
   const fresh = d.status.feed === "live" ? "" : `<span class="mut">feed: ${esc(d.status.feed)}</span>`;
   top += `<span style="flex:1"></span>${fresh}`;
   $("top").innerHTML = top;
-  // line 2: newest alert < 10 min, else best nearby
-  const a = recentAl.length ? recentAl[recentAl.length - 1] : null;
-  if (a && Date.now() / 1000 - a.t < 600) {
-    $("line2").innerHTML = `<span class="al ${a.nearMe ? "n" : "w"}">${a.nearMe ? "◉" : "⚠"} ${esc(a.sysName)}</span><span class="mut">${dtxt(a)} · ${ago(a.t)}</span>${jtag(a)}<span>${esc(a.what)}</span>`;
-  } else {
-    const b = (d.best || []).slice(0, 3);
-    $("line2").innerHTML = b.length ? `<span class="mut">Best:</span>` + b.map(r => `<span><b>${esc(r.n)}</b> <span class="mut">${r.j}j${r.npc ? " · NPC " + r.npc : ""}${r.kills ? " · kills " + r.kills : ""}</span>${jtag(r)}</span>`).join("") : `<span class="mut">quiet — no activity data near you yet</span>`;
-  }
   // alert list (map mode)
   $("alist").innerHTML = recentAl.slice(-3).reverse().map(a => `<div><span class="al ${a.nearMe ? "n" : "w"}">${a.nearMe ? "◉" : "⚠"} ${esc(a.sysName)}</span> <span class="mut">${dtxt(a)} · ${ago(a.t)}</span>${jtag(a)} ${esc(a.what)}</div>`).join("") || `<div class="mut">No alerts yet.</div>`;
   const J = d.jump || []; $("jump").classList.toggle("on", J.length > 0); $("jump").innerHTML = jumpHtml(J);
@@ -125,11 +114,7 @@ function render() {
   if (hp && hp.ok === false) { $("hlp").textContent = "⚠ Windows helper failed — no active character / middle-click. " + hp.err; $("hlp").title = hp.err; }
   const sn = d.snap; const sv = sn.msg && Date.now() / 1000 - sn.t < 15;
   $("snap").style.display = sv ? "block" : "none"; $("snap").textContent = sv ? sn.msg : "";
-  if (d.ui.mode === "map") drawMini(d, me);
-  else {   // strip: grow/shrink the window to fit the rows
-    const h = [...W.children].filter(c => c.offsetParent !== null && c.id !== "snap").reduce((t, c) => t + c.offsetHeight, 0) + 4;
-    if (Math.abs(h - window.innerHeight) > 2 && h !== ST.lastH) { ST.lastH = h; cmd("resize", { h }); }
-  }
+  drawMini(d, me);
 }
 
 // Own layout for the mini-map: force-directed around your system, seeded from the big map so the

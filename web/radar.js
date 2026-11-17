@@ -285,7 +285,6 @@ $("esiLogin").onclick = () => post("/cmd", { cmd: "esilogin" });
 $("updCheck").onclick = () => post("/cmd", { cmd: "update-check" });
 $("updGo").onclick = () => post("/cmd", { cmd: "update-install" });
 $("autoSt").onchange = () => post("/settings", { autostart: $("autoSt").checked });
-$("impOld").onclick = () => post("/cmd", { cmd: "import" });
 $("openData").onclick = () => post("/cmd", { cmd: "datadir" });
 function renderApp(d) {
   const u = d.update || {};

@@ -1,6 +1,9 @@
   <div id="radar">
    <h1>Hunt radar <span class="sub">__VERSION__</span></h1>
    <div class="sub" id="rStatus">connecting…</div>
+   <h2>Best nearby</h2>
+   <div class="sub" style="margin-bottom:4px">Lowsec and nullsec within your watch range (jumps) of the character you're flying, ranked by ratting (NPC kills/h), recent watched-ship kills and PvP.</div>
+   <table id="best"></table>
    <details id="gs" class="gs"><summary><b>Getting started</b> <span class="sub">— first-time setup, 5 steps</span></summary>
     <ol>
      <li><b>Chat logs on.</b> In EVE: <i>ESC → Chat → Log Chat to File</i>. The radar reads Local's log to know which toons you run and where they are. Jump once after turning it on.</li>
@@ -17,8 +20,8 @@
    <div class="row"><button id="updCheck">Check for updates</button><button id="updGo" style="display:none">Restart to update</button></div>
    <div class="sub">Updates download in the background; you get a <i>Restart to update</i> button here and in the tray.</div>
    <label class="chk"><input type="checkbox" id="autoSt"> Start Hunt Radar with Windows</label>
-   <div class="row"><button id="impOld">Import settings from old zip version</button><button id="openData">Open settings folder</button></div>
-   <div class="sub">Import only matters if you used the very old zip builds. The settings folder holds your settings, logins and background image.</div>
+   <div class="row"><button id="openData">Open settings folder</button></div>
+   <div class="sub">The settings folder holds your settings, logins and background image.</div>
    <h2>Overlay &amp; hotkeys</h2>
    <div class="row"><button id="ovEdit">Edit / move overlay</button><button id="ovMode">Show / hide mini-map</button><button id="ovTest">Test sounds</button></div>
    <div class="sub">The mini-map sits on top of EVE and lets clicks through. To move or resize it: <i>Edit / move overlay</i> (or the hotkey), drag, then lock again. <i>Test sounds</i> plays the beep and the klaxon.</div>
@@ -67,9 +70,6 @@
    <div class="sub" style="margin-bottom:4px">Found automatically from EVE's chat logs and window titles. ▶ marks the one you're flying (the window in front) — beeps and the mini-map follow it.</div>
    <div id="chars"></div>
    <details class="sub" style="margin-top:4px"><summary>Chat log folder</summary>Found from EVE's chat logs (ESC → Chat → "Log Chat to File" must be on). Only set this if it isn't found:<input id="clDir" type="text" style="margin-top:4px"><div class="row"><button id="clSave">Save</button></div></details>
-   <h2>Best nearby</h2>
-   <div class="sub" style="margin-bottom:4px">Lowsec and nullsec within your watch range (jumps) of the character you're flying, ranked by ratting (NPC kills/h), recent watched-ship kills and PvP.</div>
-   <table id="best"></table>
    <h2>Local</h2>
    <div class="sub" style="margin-bottom:4px">Fills when you copy Local (<code>Ctrl+A</code>, <code>Ctrl+C</code> in Local). Sorted by danger; ⚠ = seen killing in a watched ship.</div>
    <div id="local"></div>

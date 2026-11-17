@@ -12,7 +12,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:13px/1
 #map{flex:1;position:relative;cursor:grab}
 #map.drag{cursor:grabbing}
 svg{width:100%;height:100%;display:block;user-select:none}
-#svg.far .nd text,#svg.far #gStubs{display:none}
+#svg.far .nd text{display:none}
 #svg:not(.far) .rgBig{display:none}
 #svg.far .rgSmall{display:none}
 #side{width:360px;background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:12px 14px}
@@ -91,7 +91,7 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
 <body>
 <div id="wrap">
  <div id="map">
-  <svg id="svg"><g id="vp"><g id="gRegions"></g><g id="gHeat"></g><g id="gEdges"></g><g id="gStubs"></g><g id="gPulse"></g><g id="gNodes"></g><g id="gHot"></g></g></svg>
+  <svg id="svg"><g id="vp"><g id="gRegions"></g><g id="gHeat"></g><g id="gEdges"></g><g id="gPulse"></g><g id="gNodes"></g><g id="gHot"></g></g></svg>
   <input id="search" type="text" placeholder="Find system… (Enter)">
   <div id="sysPop"></div>
   <div id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="fit">Fit</button><button id="legBtn" title="Legend">ⓘ Legend</button></div>
@@ -117,6 +117,9 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
     <div id="radar">
    <h1>Hunt radar <span class="sub">__VERSION__</span></h1>
    <div class="sub" id="rStatus">connecting…</div>
+   <h2>Best nearby</h2>
+   <div class="sub" style="margin-bottom:4px">Lowsec and nullsec within your watch range (jumps) of the character you're flying, ranked by ratting (NPC kills/h), recent watched-ship kills and PvP.</div>
+   <table id="best"></table>
    <details id="gs" class="gs"><summary><b>Getting started</b> <span class="sub">— first-time setup, 5 steps</span></summary>
     <ol>
      <li><b>Chat logs on.</b> In EVE: <i>ESC → Chat → Log Chat to File</i>. The radar reads Local's log to know which toons you run and where they are. Jump once after turning it on.</li>
@@ -133,8 +136,8 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
    <div class="row"><button id="updCheck">Check for updates</button><button id="updGo" style="display:none">Restart to update</button></div>
    <div class="sub">Updates download in the background; you get a <i>Restart to update</i> button here and in the tray.</div>
    <label class="chk"><input type="checkbox" id="autoSt"> Start Hunt Radar with Windows</label>
-   <div class="row"><button id="impOld">Import settings from old zip version</button><button id="openData">Open settings folder</button></div>
-   <div class="sub">Import only matters if you used the very old zip builds. The settings folder holds your settings, logins and background image.</div>
+   <div class="row"><button id="openData">Open settings folder</button></div>
+   <div class="sub">The settings folder holds your settings, logins and background image.</div>
    <h2>Overlay &amp; hotkeys</h2>
    <div class="row"><button id="ovEdit">Edit / move overlay</button><button id="ovMode">Show / hide mini-map</button><button id="ovTest">Test sounds</button></div>
    <div class="sub">The mini-map sits on top of EVE and lets clicks through. To move or resize it: <i>Edit / move overlay</i> (or the hotkey), drag, then lock again. <i>Test sounds</i> plays the beep and the klaxon.</div>
@@ -183,9 +186,6 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
    <div class="sub" style="margin-bottom:4px">Found automatically from EVE's chat logs and window titles. ▶ marks the one you're flying (the window in front) — beeps and the mini-map follow it.</div>
    <div id="chars"></div>
    <details class="sub" style="margin-top:4px"><summary>Chat log folder</summary>Found from EVE's chat logs (ESC → Chat → "Log Chat to File" must be on). Only set this if it isn't found:<input id="clDir" type="text" style="margin-top:4px"><div class="row"><button id="clSave">Save</button></div></details>
-   <h2>Best nearby</h2>
-   <div class="sub" style="margin-bottom:4px">Lowsec and nullsec within your watch range (jumps) of the character you're flying, ranked by ratting (NPC kills/h), recent watched-ship kills and PvP.</div>
-   <table id="best"></table>
    <h2>Local</h2>
    <div class="sub" style="margin-bottom:4px">Fills when you copy Local (<code>Ctrl+A</code>, <code>Ctrl+C</code> in Local). Sorted by danger; ⚠ = seen killing in a watched ship.</div>
    <div id="local"></div>
@@ -228,9 +228,6 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
   <div class="sub" id="ignWarn" style="color:#ff9a2b"></div>
   <div class="row"><button id="apply">Apply</button><button id="defaults">Defaults</button></div>
   <div class="sub">Press <i>Apply</i> after editing. You can also click a system on the map and press <i>Ignore</i>.</div>
-  <label class="chk"><input type="checkbox" id="cDim"> Dim everything &gt; 2 jumps from targets</label>
-  <label class="chk" style="display:none"><input type="checkbox" id="cStubs"> Show exits to other regions</label>
-  <label class="chk"><input type="checkbox" id="cSec"> Colour outlines by security</label>
 
   <h2>Selected</h2>
   <div id="info" class="sub">Click a system for its neighbours, distance to your targets and an Ignore button.</div>
@@ -253,14 +250,9 @@ function dispSec(s) { if (s > 0 && s < 0.05) return 0.1; return Math.floor(s * 1
 const SEC = {"1":"#2fefef","0.9":"#48f0c0","0.8":"#00ef47","0.7":"#00f000","0.6":"#8fef2f","0.5":"#efef00","0.4":"#d77700","0.3":"#f06000","0.2":"#f04800","0.1":"#d73000","0":"#f00000"};
 const secCol = s => SEC[String(dispSec(s))] || "#f00000";
 
-// saved positions
-let saved = {}; try { saved = JSON.parse(localStorage.getItem("hm_pos") || "{}"); } catch (e) {}
-try { localStorage.removeItem("hm_pos"); } catch (e) {}
-function savePos() { try { const o = {}; DATA.sys.forEach(s => { if (s.px !== s.x0 || s.py !== s.y0) o[s.id] = [s.px, s.py]; }); localStorage.setItem("hm_pos", JSON.stringify(o)); } catch (e) {} }
 
 // targets
-let secColours = false;
-let camp = new Set(), hunt = new Set(), eyes = new Map(), dist = {};
+let camp = new Set(), dist = {};
 function parseList(txt, allowConst) {
   const out = new Set(), bad = [];
   txt.split(/[,\n;]+/).map(t => t.trim()).filter(Boolean).forEach(t => {
@@ -273,24 +265,15 @@ function parseList(txt, allowConst) {
 }
 function computeTargets() {
   const [c, b1] = parseList($("tCamp").value, true), [ig] = parseList(($("tIgn") || {}).value || "", true);
-  camp = c; hunt = new Set();
+  camp = c;
   const bad = b1;
   const both = [...c].filter(id => ig.has(id)).map(id => S[id].n);
   if ($("ignWarn")) $("ignWarn").textContent = both.length ? `Both watched and ignored (ignore wins): ${both.join(", ")}` : "";
   $("apply").textContent = bad.length ? "Apply (unknown: " + bad.join(", ") + ")" : "Apply";
-  const T = new Set([...camp, ...hunt]);
+  const T = new Set(camp);
   // multi-source BFS distance to any target
   dist = {}; const q = [...T]; T.forEach(t => dist[t] = 0);
   while (q.length) { const u = q.shift(); ADJ[u].forEach(v => { if (dist[v] === undefined) { dist[v] = dist[u] + 1; q.push(v); } }); }
-  eyes = new Map();
-  DATA.sys.forEach(s => {
-    if (T.has(s.id)) return;
-    const n1 = new Set(ADJ[s.id].filter(v => T.has(v)));
-    if (!n1.size) return;
-    const n2 = new Set(); ADJ[s.id].forEach(v => ADJ[v].forEach(w => { if (T.has(w) && !n1.has(w)) n2.add(w); }));
-    eyes.set(s.id, { n1: [...n1], n2: n2.size });
-  });
-
 }
 
 // region backdrops
@@ -309,36 +292,15 @@ function drawRegions() {
 // edges: a handful of <path>s, not 7,000 <line>s (the whole cluster is drawn at once)
 function drawEdges(V) {          // V = area to draw (zoomed in); none = everything (zoomed out)
   const g = $("gEdges"); g.innerHTML = "";
-  const dim = $("cDim").checked, P = { n: [], x: [], f: [] };
+  const P = { n: [], x: [] };
   const outside = (A, B) => V && (Math.max(A.px, B.px) < V.x0 || Math.min(A.px, B.px) > V.x1 || Math.max(A.py, B.py) < V.y0 || Math.min(A.py, B.py) > V.y1);
   DATA.gates.forEach(([a, b]) => {
     const A = S[a], B = S[b]; if (outside(A, B)) return;
     const seg = `M${A.px.toFixed(0)} ${A.py.toFixed(0)}L${B.px.toFixed(0)} ${B.py.toFixed(0)}`;
-    (dim && !(dist[a] <= 2 && dist[b] <= 2) ? P.f : A.r !== B.r ? P.x : P.n).push(seg);
+    (A.r !== B.r ? P.x : P.n).push(seg);
   });
   if (P.n.length) el("path", { d: P.n.join(""), stroke: "#5b636d", "stroke-width": 1.2, "stroke-opacity": .9, fill: "none" }, g);
   if (P.x.length) el("path", { d: P.x.join(""), stroke: "#5b636d", "stroke-width": 1.8, "stroke-dasharray": "6 4", "stroke-opacity": .9, fill: "none" }, g);
-  if (P.f.length) el("path", { d: P.f.join(""), stroke: "#5b636d", "stroke-width": 1.2, "stroke-opacity": .14, fill: "none" }, g);
-}
-
-// stubs to other regions
-function drawStubs() {
-  const g = $("gStubs"); g.innerHTML = "";
-  if (!$("cStubs").checked) return;
-  const cnt = {};
-  DATA.stubs.forEach(st => {
-    const s = S[st.f]; const i = cnt[st.f] = (cnt[st.f] || 0) + 1;
-    // push away from neighbours' centroid
-    let cx = 0, cy = 0; ADJ[s.id].forEach(v => { cx += S[v].px; cy += S[v].py; });
-    const n = ADJ[s.id].length || 1; let dx = s.px - cx / n, dy = s.py - cy / n; const L = Math.hypot(dx, dy) || 1;
-    dx /= L; dy /= L; const ang = Math.atan2(dy, dx) + (i - 1) * 0.6;
-    const x = s.px + Math.cos(ang) * 62, y = s.py + Math.sin(ang) * 46;
-    el("line", { x1: s.px, y1: s.py, x2: x, y2: y, stroke: "#5b636d", "stroke-width": 1, "stroke-dasharray": "3 3", "stroke-opacity": .8 }, g);
-    const w = Math.max(st.n.length, st.r.length) * 5.6 + 10;
-    el("rect", { x: x - w / 2, y: y - 12, width: w, height: 24, rx: 3, fill: "#16191d", stroke: "#3a424b" }, g);
-    const t = el("text", { x, y: y - 1, "text-anchor": "middle", "font-size": 9.5, fill: "#8f99a3", "font-weight": 600 }, g); t.textContent = st.n;
-    const t2 = el("text", { x, y: y + 9, "text-anchor": "middle", "font-size": 8, fill: "#646d77" }, g); t2.textContent = st.r;
-  });
 }
 
 // nodes. Zoomed out: every system as a dot (a few <path>s). Zoomed in: full boxes, but only for what's on screen
@@ -353,19 +315,19 @@ function viewRect(pad) {
 }
 function drawNodes() {
   const g = $("gNodes"); g.innerHTML = ""; nodeEls = {};
-  const dim = $("cDim").checked, IGN = window.IGNORED || new Set();
+  const IGN = window.IGNORED || new Set();
   if (view.k < NEAR) {
     const D = {}, add = (k, s, r) => (D[k] = D[k] || []).push(`M${(s.px - r).toFixed(0)} ${(s.py - r).toFixed(0)}h${2 * r}v${2 * r}h${-2 * r}z`);
     DATA.sys.forEach(s => {
-      const c = secClass(s), hot = camp.has(s.id) || hunt.has(s.id);
-      const faded = IGN.has(s.id) || (dim && !(dist[s.id] <= 2)) || (c === "h" && !hot);
+      const c = secClass(s), hot = camp.has(s.id);
+      const faded = IGN.has(s.id) || (c === "h" && !hot);
       add(c + (faded ? "f" : ""), s, c === "h" ? 11 : 15);
-      if (camp.has(s.id)) add("camp", s, 30); else if (hunt.has(s.id)) add("hunt", s, 26);
+      if (camp.has(s.id)) add("camp", s, 30);
     });
     for (const k in D) {
       const c = k[0], f = k.length === 2;
-      if (k === "camp" || k === "hunt") el("path", { d: D[k].join(""), fill: "none", stroke: k === "camp" ? "#ff3b3b" : "#ffb020", "stroke-width": 9 }, g);
-      else el("path", { d: D[k].join(""), fill: secColours ? "#59626c" : NODE[c][1], "fill-opacity": f ? .3 : .95 }, g);
+      if (k === "camp") el("path", { d: D[k].join(""), fill: "none", stroke: "#ff3b3b", "stroke-width": 9 }, g);
+      else el("path", { d: D[k].join(""), fill: NODE[c][1], "fill-opacity": f ? .3 : .95 }, g);
     }
     built = "far"; drawEdges(); drawHotFar();
   } else {
@@ -374,14 +336,12 @@ function drawNodes() {
       if (s.px < R.x0 || s.px > R.x1 || s.py < R.y0 || s.py > R.y1) return;
       const grp = el("g", { class: "nd", transform: `translate(${s.px},${s.py})` }, g);
       const w = Math.max(54, s.n.length * 6.4 + 14), h = 28;
-      const isC = camp.has(s.id), isH = hunt.has(s.id), c = secClass(s), hot = isC || isH;
+      const isC = camp.has(s.id), c = secClass(s), hot = isC;
       if (isC) el("rect", { x: -w / 2 - 7, y: -h / 2 - 7, width: w + 14, height: h + 14, rx: 11, fill: "none", stroke: "#ff3b3b", "stroke-width": 4 }, grp);
-      if (isH) el("rect", { x: -w / 2 - 5, y: -h / 2 - 5, width: w + 10, height: h + 10, rx: 10, fill: "none", stroke: "#ffb020", "stroke-width": 4 }, grp);
-      el("rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: 7, fill: NODE[c][0], stroke: secColours ? secCol(s.s) : NODE[c][1], "stroke-width": c !== "h" || secColours ? 1.6 : 1 }, grp);
+      el("rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: 7, fill: NODE[c][0], stroke: NODE[c][1], "stroke-width": c !== "h" ? 1.6 : 1 }, grp);
       const t = el("text", { y: -1, "text-anchor": "middle", "font-size": 11, "font-weight": hot ? 800 : 600, fill: hot ? "#fff" : c === "n" ? "#e6b8bb" : "#b9c1ca" }, grp); t.textContent = s.n;
       const t2 = el("text", { y: 10.5, "text-anchor": "middle", "font-size": 8, fill: "#7f8a96" }, grp); t2.textContent = dispSec(s.s).toFixed(1) + " · " + s.c;
-      if (dim && !(dist[s.id] <= 2)) grp.setAttribute("opacity", .22);
-      else if (c === "h" && !hot) grp.setAttribute("opacity", .38);
+      if (c === "h" && !hot) grp.setAttribute("opacity", .38);
       if (IGN.has(s.id)) grp.setAttribute("opacity", .28);
       if (window.radarNode) radarNode(s, grp, w, h);
       grp.addEventListener("click", e => { e.stopPropagation(); select(s.id, false); });
@@ -412,19 +372,12 @@ $("svg").addEventListener("click", e => {
   if (best) select(best.id, true);
 });
 
-function renderEyes() { return;
-  const rows = [...eyes.entries()].sort((a, b) => b[1].n1.length - a[1].n1.length || b[1].n2 - a[1].n2 || S[a[0]].n.localeCompare(S[b[0]].n));
-  $("eyes").innerHTML = rows.slice(0, 40).map(([id, e]) => `<tr class="cl" data-id="${id}"><td><b>${S[id].n}</b> <span class="sub">${dispSec(S[id].s).toFixed(1)}</span><br><span class="sub">→ ${e.n1.map(v => S[v].n).join(", ")}</span></td><td class="n">${e.n1.length} / ${e.n2}</td></tr>`).join("");
-  $("eyes").querySelectorAll("tr").forEach(tr => tr.onclick = () => select(+tr.dataset.id, true));
-}
-
 function select(id, center) {
   const s = S[id];
-  const role = camp.has(id) ? '<span class="tag" style="background:#ff3b3b;color:#000">watched</span>' : hunt.has(id) ? '<span class="tag" style="background:#ffb020;color:#000">hunt</span>' : "";
-  const nb = ADJ[id].map(v => `<a href="#" data-id="${v}" style="color:${camp.has(v) ? "#ff6b6b" : hunt.has(v) ? "#ffc04d" : "#9cc9ff"}">${S[v].n}</a> <span class="sub">${dispSec(S[v].s).toFixed(1)}</span>`).join("<br>");
-  const ex = DATA.stubs.filter(t => t.f === id).map(t => `${t.n} <span class="sub">(${t.r})</span>`).join("<br>");
+  const role = camp.has(id) ? '<span class="tag" style="background:#ff3b3b;color:#000">watched</span>' : "";
+  const nb = ADJ[id].map(v => `<a href="#" data-id="${v}" style="color:${camp.has(v) ? "#ff6b6b" : "#9cc9ff"}">${S[v].n}</a> <span class="sub">${dispSec(S[v].s).toFixed(1)}</span>`).join("<br>");
   const ign = window.IGNORED && window.IGNORED.has(id);
-  $("info").innerHTML = `<b>${s.n}</b> ${role}${window.toggleIgnore ? ` <button id="ignBtn" style="float:right">${ign ? "Un-ignore" : "Ignore"}</button>` : ""}<br><span class="sub">${s.r} › ${s.c} · sec ${dispSec(s.s).toFixed(1)} (${s.s.toFixed(2)})<br>${dist[id] === undefined ? "no target in reach" : dist[id] === 0 ? "target" : dist[id] + " jump(s) to nearest target"}</span><div style="margin-top:6px">${nb}${ex ? "<br>" + ex : ""}</div>`;
+  $("info").innerHTML = `<b>${s.n}</b> ${role}${window.toggleIgnore ? ` <button id="ignBtn" style="float:right">${ign ? "Un-ignore" : "Ignore"}</button>` : ""}<br><span class="sub">${s.r} › ${s.c} · sec ${dispSec(s.s).toFixed(1)} (${s.s.toFixed(2)})<br>${dist[id] === undefined ? "no target in reach" : dist[id] === 0 ? "target" : dist[id] + " jump(s) to nearest target"}</span><div style="margin-top:6px">${nb}</div>`;
   $("info").querySelectorAll("a").forEach(a => a.onclick = ev => { ev.preventDefault(); select(+a.dataset.id, true); });
   if ($("ignBtn")) $("ignBtn").onclick = () => { window.toggleIgnore(id); setTimeout(() => select(id, false), 400); };
   flashId = id; flash(id);
@@ -475,12 +428,9 @@ $("search").addEventListener("keydown", e => {
 });
 $("search").addEventListener("input", e => e.target.style.borderColor = "");
 
-function renderAll() { computeTargets(); drawRegions(); drawStubs(); drawNodes(); renderEyes(); }
+function renderAll() { computeTargets(); drawRegions(); drawNodes(); }
 $("apply").onclick = renderAll;
 $("defaults").onclick = () => { $("tCamp").value = DEF_CAMP; renderAll(); };
-["cDim"].forEach(id => $(id).onchange = () => { drawNodes(); });
-$("cSec").onchange = () => { secColours = $("cSec").checked; drawNodes(); };
-$("cStubs").onchange = drawStubs;
 
 let st = null; try { st = JSON.parse(localStorage.getItem("hm_t")); } catch (e) {}
 $("tCamp").value = DEF_CAMP;
@@ -772,7 +722,6 @@ $("esiLogin").onclick = () => post("/cmd", { cmd: "esilogin" });
 $("updCheck").onclick = () => post("/cmd", { cmd: "update-check" });
 $("updGo").onclick = () => post("/cmd", { cmd: "update-install" });
 $("autoSt").onchange = () => post("/settings", { autostart: $("autoSt").checked });
-$("impOld").onclick = () => post("/cmd", { cmd: "import" });
 $("openData").onclick = () => post("/cmd", { cmd: "datadir" });
 function renderApp(d) {
   const u = d.update || {};
