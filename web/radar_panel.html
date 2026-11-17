@@ -1,14 +1,27 @@
   <div id="radar">
    <h1>Hunt radar <span class="sub">__VERSION__</span></h1>
    <div class="sub" id="rStatus">connecting…</div>
+   <details id="gs" class="gs"><summary><b>Getting started</b> <span class="sub">— first-time setup, 5 steps</span></summary>
+    <ol>
+     <li><b>Chat logs on.</b> In EVE: <i>ESC → Chat → Log Chat to File</i>. The radar reads Local's log to know which toons you run and where they are. Jump once after turning it on.</li>
+     <li><b>Place the overlay.</b> EVE must run <i>windowed</i> or <i>Fixed window</i>. Press <code>Ctrl+Shift+O</code>, drag the mini-map where you want it, resize from the edges, press again to lock (it's click-through when locked).</li>
+     <li><b>Your systems and ships.</b> Under <i>Targets</i> (below) list the systems you camp or hunt. Under <i>Watched ships</i> pick the hulls you care about: ✓ = highlight, ✗ = also beep.</li>
+     <li><b>Pilot lookup.</b> <i>Mark Local area</i> and drag a box over Local's member list. Then middle-click any name in Local for a zKill card.</li>
+     <li><b>Optional: jump toons.</b> Log in your blops/capital toons under <i>Jump drive toons</i> to see which systems they reach.</li>
+    </ol>
+    <div class="sub">Everything saves automatically. Click <b>ⓘ Legend</b> on the map for what the colours mean.</div>
+   </details>
    <h2>App</h2>
    <div class="sub" id="updSt">…</div>
    <div id="hlpErr" class="sub" style="display:none;color:#ff8a8a;background:rgba(255,77,77,.12);border:1px solid rgba(255,77,77,.35);border-radius:6px;padding:6px 8px;margin:8px 0;user-select:text"></div>
    <div class="row"><button id="updCheck">Check for updates</button><button id="updGo" style="display:none">Restart to update</button></div>
+   <div class="sub">Updates download in the background; you get a <i>Restart to update</i> button here and in the tray.</div>
    <label class="chk"><input type="checkbox" id="autoSt"> Start Hunt Radar with Windows</label>
    <div class="row"><button id="impOld">Import settings from old zip version</button><button id="openData">Open settings folder</button></div>
+   <div class="sub">Import only matters if you used the very old zip builds. The settings folder holds your settings, logins and background image.</div>
    <h2>Overlay &amp; hotkeys</h2>
    <div class="row"><button id="ovEdit">Edit / move overlay</button><button id="ovMode">Show / hide mini-map</button><button id="ovTest">Test sounds</button></div>
+   <div class="sub">The mini-map sits on top of EVE and lets clicks through. To move or resize it: <i>Edit / move overlay</i> (or the hotkey), drag, then lock again. <i>Test sounds</i> plays the beep and the klaxon.</div>
    <label>Overlay opacity <span id="opV" class="sub"></span></label><input id="ovOp" type="range" min="0.4" max="1" step="0.02" style="width:100%">
    <label>Background image</label>
    <div class="row"><button id="bgPick">Choose image…</button><button id="bgDef">Default</button><button id="bgClear">Remove</button>
@@ -16,45 +29,63 @@
    <label class="chk"><input type="checkbox" id="bgOv"> On the overlay</label>
    <label class="chk"><input type="checkbox" id="bgMap"> On the big map</label>
    <label>Darken image <span id="bgDimV" class="sub"></span></label><input id="bgDim" type="range" min="0" max="0.9" step="0.05" style="width:100%">
+   <div class="sub"><i>Fill</i> covers the panel (photos, wallpapers), <i>Fit</i> shows the whole image (logos). Raise <i>Darken</i> if names get hard to read.</div>
    <label>Mini-map radius</label><select id="ovJ"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select>
+   <div class="sub">Gate jumps shown around the toon you're flying. Highsec only appears as grey dots at the edge. If the panel is too small for the radius it shrinks it and says so (<i>r 5→3</i>) — make the panel bigger or pick a smaller radius.</div>
    <label class="chk"><input type="checkbox" id="sndOn" checked> Alert sounds</label>
    <table class="keys">
     <tr><td>Edit / lock overlay</td><td><input id="kEdit" type="text"></td><td id="kEditS" class="sub"></td></tr>
     <tr><td>Show / hide mini-map</td><td><input id="kMode" type="text"></td><td id="kModeS" class="sub"></td></tr>
     <tr><td>Open / close big map</td><td><input id="kMap" type="text"></td><td id="kMapS" class="sub"></td></tr>
    </table>
-   <div class="sub">Click a box and press the keys you want. Saved automatically.</div>
+   <div class="sub">Click a box and press the keys you want. Saved automatically. "taken" means another program (or EVE) already uses that combination — pick another.</div>
    <h2>Jump drive toons (ESI)</h2>
-   <div class="sub">Log in your blops / capital toons. While ESI says one sits in a jump-drive hull, alerts and Best nearby get <b style="color:#3ddc84">⤳✓</b> when the system is in range (uses each toon's real Jump Drive Calibration level), and in-range lowsec gets a dashed violet ring.</div>
+   <div class="sub">Log in your blops / capital toons. While ESI says one sits in a jump-drive hull, the mini-map shows <b>⤳ In range: …</b> (which of them can reach the toon you're flying), alerts get <b style="color:#3ddc84">⤳✓</b>, and in-range systems get a dashed violet ring. Range uses each toon's real Jump Drive Calibration level.</div>
    <table id="jt" class="keys"></table>
    <div id="jumpSt" class="sub" style="margin-top:4px"></div>
-   <label>ESI Client ID <span class="sub">(developers.eveonline.com · callback <code>http://localhost:8765/callback</code> · scopes <code>esi-location.read_ship_type.v1</code> + <code>esi-skills.read_skills.v1</code>)</span></label>
+   <details class="sub" style="margin-top:6px"><summary>How to set up the ESI login (once)</summary>
+    <ol>
+     <li>Go to <a href="https://developers.eveonline.com" target="_blank">developers.eveonline.com</a>, log in and create a new application.</li>
+     <li>Callback URL: <code>http://localhost:8765/callback</code></li>
+     <li>Scopes: <code>esi-location.read_ship_type.v1</code> and <code>esi-skills.read_skills.v1</code> — nothing else is needed.</li>
+     <li>Copy the app's <b>Client ID</b>, paste it below and press <i>Save</i>.</li>
+     <li><i>Log in a character</i> opens EVE's login page in your browser — pick the toon, accept. Repeat for each jump toon.</li>
+    </ol>
+    The radar only reads ship type and skills. It can't move, fit or see anything else on the account.
+   </details>
+   <label>ESI Client ID</label>
    <input id="esiCid" type="text" placeholder="paste Client ID">
    <div class="row"><button id="esiSave">Save</button><button id="esiLogin">Log in a character</button></div>
    <h2>Pilot lookup</h2>
    <label class="chk"><input type="checkbox" id="luOn" checked> Middle-click a name in Local → zKill card</label>
-   <div class="sub">Mark a box over Local's member list. The click still goes to EVE as normal; only that one row is read (OCR). To scan all of Local, click in Local and press Ctrl+A, Ctrl+C yourself — the radar picks it up from the clipboard.</div>
+   <div class="sub"><b>Set up:</b> <i>Mark Local area</i>, then drag a box over Local's member list (redo it if you move or resize Local).<br>
+   <b>Use:</b> middle-click a name in Local → a card with zKill danger, recent kills and links. The click still reaches EVE; only that one row is read.<br>
+   <b>Tip:</b> click in Local and press <code>Ctrl+A</code>, <code>Ctrl+C</code> once per system. That fills <i>Local</i> below with every pilot and their danger, and makes name reading much more accurate.</div>
    <div class="row"><button id="snPick">Mark Local area</button></div>
    <div class="sub" id="snMsg"></div>
    <h2>Your characters</h2>
+   <div class="sub" style="margin-bottom:4px">Found automatically from EVE's chat logs and window titles. ▶ marks the one you're flying (the window in front) — beeps and the mini-map follow it.</div>
    <div id="chars"></div>
    <details class="sub" style="margin-top:4px"><summary>Chat log folder</summary>Found from EVE's chat logs (ESC → Chat → "Log Chat to File" must be on). Only set this if it isn't found:<input id="clDir" type="text" style="margin-top:4px"><div class="row"><button id="clSave">Save</button></div></details>
    <h2>Best nearby</h2>
    <div class="sub" style="margin-bottom:4px">Lowsec and nullsec within your watch range (jumps) of the character you're flying, ranked by ratting (NPC kills/h), recent watched-ship kills and PvP.</div>
    <table id="best"></table>
    <h2>Local</h2>
+   <div class="sub" style="margin-bottom:4px">Fills when you copy Local (<code>Ctrl+A</code>, <code>Ctrl+C</code> in Local). Sorted by danger; ⚠ = seen killing in a watched ship.</div>
    <div id="local"></div>
    <h2>Watched ships</h2>
    <div class="sub" id="wlSum"></div>
    <div class="row"><button id="wlOpen">Edit ship watchlists…</button></div>
+   <div class="sub">In the editor, click a box to cycle: <b>✓ watched</b> (highlighted on the map and in kill popups, silent) → <b>✗ pinged</b> (also beeps) → off. Several named lists can be on at once.</div>
    <label class="chk"><input type="checkbox" id="pVictim" checked> Also alert when one of them is the victim</label>
    <h2>Watch range</h2>
-   <div class="sub">Kills outside this range are ignored completely. Highsec and wormholes are never watched.</div>
+   <div class="sub">Kills outside this range are ignored completely (not on the map, no heat, no beeps). Highsec and wormholes are never watched. Bigger range = more on the map, a bit more network traffic.</div>
    <label class="chk"><input type="checkbox" id="wJOn" checked> within <input id="wJ" type="number" min="1" max="60" style="width:56px"> gate jumps of any of my characters</label>
    <label class="chk"><input type="checkbox" id="wLOn" checked> within <input id="wL" type="number" min="1" max="40" step="0.5" style="width:56px"> LY of my jump toons</label>
    <div class="row" style="gap:14px"><label class="chk"><input type="checkbox" id="spL" checked> lowsec</label><label class="chk"><input type="checkbox" id="spN" checked> nullsec</label><label class="chk"><input type="checkbox" id="spP" checked> Pochven</label></div>
    <div class="sub" id="wCnt"></div>
    <h2>Beeps</h2>
+   <div class="sub" style="margin-bottom:2px">Two sounds: a <b>low klaxon</b> = any fight close to you, a <b>bright beep</b> = a ✗ pinged ship. Everything else is silent (map + popups only).</div>
    <label>Beep radius: kills within <select id="pNearR" style="width:auto;display:inline"><option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option><option>7</option><option>10</option></select> jumps of the character you're flying</label>
    <label class="chk"><input type="checkbox" id="pNear" checked> any PvP kill in the beep radius → low klaxon (watched ships always beep)</label>
    <label>Watched systems: pinged ships within</label>
