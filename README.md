@@ -1,6 +1,6 @@
 # Hunt Radar
 
-Lowsec hunting overlay for EVE Online — Genesis, Kor-Azor and Kador (plus the Armi pocket in Domain).
+Hunting overlay for EVE Online — all of known space (lowsec, nullsec, Pochven), never highsec or wormholes.
 A translucent, click-through strip or mini-map on top of EVE with live PvP kills, ratting activity,
 Local intel, pilot lookups and jump range for blops/capitals.
 
@@ -23,22 +23,26 @@ EVE must run windowed or in *Fixed window* mode — overlays can't draw over exc
 | | |
 |---|---|
 | **Strip** | your character · system · 👥 Local count (⚠ known killers) · ◉ near-me alerts · newest alert or best nearby · jump range |
-| **Mini-map** | systems around you: ratting glow, kill rings (magenta = watched ship), 👥 Local, ⤳ jump range |
+| **Mini-map** | systems around you on the in-game 2D map layout: ratting glow, kill rings (magenta = watched ship), 👥 Local, ⤳ jump range |
+| **Map & settings** | all of New Eden on the in-game 2D map layout (nullsec dark red, lowsec orange, highsec dimmed), kill feed, all settings |
 | `Ctrl+Shift+O` | unlock the overlay to move/resize/click it (again to lock) |
 | `Ctrl+Shift+M` | strip ↔ mini-map |
 | Tray icon | map & settings, edit overlay, mark Local area, updates, quit |
 
-**Sounds** — bright triple beep: a watched ship (battleship, marauder, Black Ops, T3C, capital,
-battlecruiser, Orca/Porpoise, exhumer) near your targets or characters. Low klaxon: any lowsec PvP
-kill within 5 jumps of the character you're flying.
+**Watch range** — kills are kept within 20 gate jumps of any of your characters, or 16 LY of a jump toon.
+
+**Sounds** — low klaxon: any PvP kill within 5 jumps of the character you're flying. Bright triple beep:
+a *pinged* ship within 5 jumps of you or near your watched systems. Everything else is silent (feed + map).
+
+**Ship watchlists** — Map & settings → Watched ships: every ship type in the game, several named lists.
+Click a box to cycle: ✓ watched (highlighted, silent) → ✗ pinged (beeps) → off.
 
 **Local** — in EVE click Local, `Ctrl+A`, `Ctrl+C`: the radar reads your clipboard and shows
 corps/alliances, zKill danger and pilots it has seen killing in watched ships.
-Optional snapshot key: screenshot + Windows OCR of the Local area you mark, or `Ctrl+A, Ctrl+C`
-sent to EVE (grey area under CCP's input rules — your own risk).
 
 **Pilot lookup** — mark the Local area once (tray → *Mark Local area*), then middle-click a name in
-Local for a zKill card (danger, gang/solo, kills, top ships/systems). The click still reaches EVE. OCR misreads
+Local for a pilot card: portrait, corp/alliance, zKill danger, recent PvP (last 7 days, else 30, else 90),
+top ships/systems, links to zKillboard, Dotlan and EVE Who. The click still reaches EVE. OCR misreads
 (l/I/1, O/0, rn/m…) are corrected by matching against your last Local `Ctrl+C`, pilots on recent kills,
 and look-alike spellings that exist in ESI — copy Local once per system for the best hit rate.
 
@@ -54,8 +58,8 @@ Jump Drive Calibration level. Needs your own app from
 
 zKillboard's public kill feed (R2Z2), CCP's public ESI data, EVE's own chat log files
 (`Documents\EVE\logs\Chatlogs` — *Log Chat to File* must be on), EVE window titles, your clipboard,
-and — only if you enable them — a screenshot of the Local area you mark, middle-clicks, and ESI
-logins for ship type and skills. It never reads or modifies the EVE client.
+and — only if you enable them — middle-clicks plus a screenshot of the one Local row you clicked, and ESI
+logins for ship type and skills. It never reads or modifies the EVE client and never sends keystrokes to it.
 
 ## Development
 
@@ -65,7 +69,10 @@ npm start            # run from source (settings in ./data)
 npm run dist         # build the installer into dist/ without publishing
 ```
 
-Release: bump `version` in `package.json`, commit, then `git tag vX.Y.Z && git push --tags`.
+Release: bump `version` in `package.json`, commit, then `git tag vX.Y.Z && git push --tags`
+(or run the *Release* workflow from the Actions tab — it tags the version itself).
 The *Release* workflow builds the installer on Windows and publishes it; installed copies update.
 
 Map page sources are in `web/` and are assembled into `src/map.html` by `scripts/build-map.js`.
+Map layout: `scripts/build-map-data.py [mapSolarSystems.jsonl]` builds `src/data.json` from CCP's SDE
+(`position2D`); a compact copy lives in `scripts/sde/pos2d.json`.
