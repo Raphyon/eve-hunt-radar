@@ -297,7 +297,6 @@ function startHelper() {
 }
 // null = not Windows / still starting · {ok:true} · {ok:false, err} (shown in the overlay and settings)
 function helperStatus() {
-  if (process.env.HR_FAKE_HELPER_ERR) return { ok: false, err: process.env.HR_FAKE_HELPER_ERR };   // test hook
   if (process.platform !== "win32") return null;
   if (helper.ready && helper.winFails < 5) return { ok: true };
   if (!helper.ready && helper.exits === 0 && Date.now() - helper.startedAt < 25000) return null;
@@ -755,12 +754,10 @@ function hideCard() { clearTimeout(card.timer); card.seq++; if (card.win && !car
 
 // ------------------------------------------------------------- windows: overlay, map, area picker, tray
 let overlay = null, mapWin = null, tray = null, editMode = false;
-const OV_SIZE = { strip: [560, 62], map: [480, 540] };
 function overlayBounds() {
-  const m = settings.overlay.mode === "map" ? "map" : "strip";
-  const b = settings.overlay[m];
+  const b = settings.overlay.map;
   if (b) return b;
-  const wa = screen.getPrimaryDisplay().workArea, [w, h] = OV_SIZE[m];
+  const wa = screen.getPrimaryDisplay().workArea, w = 480, h = 540;
   return { x: wa.x + Math.round((wa.width - w) / 2), y: wa.y + 8, width: w, height: h };
 }
 function createOverlay() {
@@ -774,7 +771,7 @@ function createOverlay() {
   overlay.setIgnoreMouseEvents(true);
   overlay.loadURL(`http://127.0.0.1:${PORT}/overlay`);
   overlay.once("ready-to-show", () => overlay.showInactive());
-  const remember = () => { if (!overlay || overlay.isDestroyed()) return; const m = settings.overlay.mode === "map" ? "map" : "strip"; settings.overlay[m] = overlay.getBounds(); saveSettings(); };
+  const remember = () => { if (!overlay || overlay.isDestroyed()) return; settings.overlay.map = overlay.getBounds(); saveSettings(); };
   overlay.on("moved", remember); overlay.on("resized", remember);
 }
 function setEdit(on) {
@@ -890,17 +887,6 @@ function applyAutostart() {
   if (process.platform !== "win32" || !app.isPackaged) return;
   try { app.setLoginItemSettings({ openAtLogin: !!settings.autostart }); } catch { }
 }
-async function importOldSettings() {
-  const r = await dialog.showOpenDialog({ title: "Pick your old Hunt Radar 'data' folder (from the zip versions)", properties: ["openDirectory"] });
-  if (r.canceled || !r.filePaths[0]) return "cancelled";
-  const d = r.filePaths[0]; let n = 0;
-  const old = loadJSON(path.join(d, "settings.json"), null);
-  if (old) { settings = Object.assign({}, DEFAULTS, old); settings.overlay = Object.assign({}, DEFAULTS.overlay, old.overlay || {}); settings.overlay.strip = null; settings.overlay.map = null; saveSettings(); n++; }
-  const tok = loadJSON(path.join(d, "tokens.json"), null);
-  if (tok) { Object.assign(esi.tokens, tok); saveTokens(); n++; }
-  registerKeys(); updateTray(); if (overlay) overlay.setBounds(overlayBounds());
-  return n ? `imported ${n} file(s)` : "no settings found in that folder";
-}
 
 // ------------------------------------------------------------- local web server (overlay + map pages talk to this)
 const read = f => fs.readFileSync(path.join(HERE, f), "utf8");
@@ -982,13 +968,8 @@ function startServer() {
         else if (c === "esilogin") openLogin();
         else if (c === "update-check") { if (autoUpdater && app.isPackaged) autoUpdater.checkForUpdates().catch(() => { }); }
         else if (c === "update-install") { if (upd.state === "ready") { app.isQuitting = true; autoUpdater.quitAndInstall(false, true); } }
-        else if (c === "import") { importOldSettings().then(m => { snap.msg = m; snap.t = now(); }); }
         else if (c === "datadir") shell.openPath(DATA_DIR);
         else if (c === "esilogout") { const id = Object.keys(esi.tokens).find(k => esi.tokens[k].name === j.name); if (id) { delete esi.tokens[id]; delete esi.ships[j.name]; saveTokens(); } }
-        else if (c === "resize" && overlay && settings.overlay.mode !== "map") {   // strip grows/shrinks to fit its rows
-          const b = overlay.getBounds(), h = Math.max(40, Math.min(220, Math.round(+j.h || b.height)));
-          if (Math.abs(h - b.height) > 2) { overlay.setBounds({ x: b.x, y: b.y, width: b.width, height: h }); }
-        }
         else if (c === "lookup") lookupPilot(String(j.name || ""), j.at || [screen.getPrimaryDisplay().workArea.width / 2, 300]);
         return send(200, "{}", "application/json");
       }
