@@ -56,18 +56,19 @@ const DEFAULTS = {
   victim: true, range: 3, sound: true, near: true, nearRange: 5, chatlogs: "",
   // v10: watch range (kills outside are dropped before any lookup) and space bands
   watchJumpsOn: true, watchJumps: 20, watchLyOn: true, watchLy: 16, space: { low: true, null: true, poch: true }, beepGap: 10,
-  keyEdit: "Ctrl+Shift+O", keyMode: "Ctrl+Shift+M",
+  keyEdit: "Ctrl+Shift+O", keyMode: "Ctrl+Shift+M", keyMap: "Ctrl+Shift+B",   // keyMode = show/hide mini-map, keyMap = open/close big map
   localArea: null, lookupOn: true,
   bg: { file: "@default", v: 1, overlay: true, map: true, dim: 0.55, fit: "contain" },   // background image: "@default" = bundled art, else a file copied into the settings folder
   jumpToons: {},                 // (unused since v9.3, kept for old settings files)
   autostart: false,
   esiClientId: "",               // optional: EVE developer app client ID, only for reading ship type
-  overlay: { mode: "strip", strip: null, map: null, opacity: 0.85, mapJumps: 3 },
+  overlay: { mode: "map", strip: null, map: null, opacity: 0.85, mapJumps: 3 },
 };
 function loadJSON(p, d) { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return d; } }
 let settings = Object.assign({}, DEFAULTS, loadJSON(SETTINGS_FILE, {}));
 settings.overlay = Object.assign({}, DEFAULTS.overlay, settings.overlay || {});
 settings.bg = Object.assign({}, DEFAULTS.bg, settings.bg || {});
+settings.overlay.mode = "map";   // 10.0.5: the strip is gone, the overlay is always the mini-map
 if (!settings.bgMapOn) { settings.bg.map = true; settings.bgMapOn = true; }   // 10.0.4: background on the big map too (10.0.3 saved it off)
 { const old = loadJSON(SETTINGS_FILE, {});          // v10: camp spots + hunting grounds -> one "watched systems" list
   if (old.watched == null && (old.camp || old.hunt)) settings.watched = [...new Set([old.camp, old.hunt].filter(Boolean).join(",").split(/[,\n;]+/).map(t => t.trim()).filter(Boolean))].join(", "); }
@@ -784,10 +785,16 @@ function setEdit(on) {
   overlay.setAlwaysOnTop(true, "screen-saver");
   updateTray();
 }
-function setMode(m) {
-  settings.overlay.mode = m; saveSettings();
-  if (overlay) { overlay.setBounds(overlayBounds()); }
+function setMode() { toggleOverlay(); }        // (old strip <-> mini-map switch; the strip is gone)
+let overlayHidden = false;
+function toggleOverlay() {
+  if (!overlay || overlay.isDestroyed()) return;
+  overlayHidden = overlay.isVisible(); if (overlayHidden) overlay.hide(); else overlay.showInactive();
   updateTray();
+}
+function toggleMap() {
+  if (mapWin && !mapWin.isDestroyed() && mapWin.isVisible() && !mapWin.isMinimized()) { mapWin.hide(); return; }
+  openMap();
 }
 function openMap() {
   if (mapWin && !mapWin.isDestroyed()) { mapWin.show(); mapWin.focus(); return; }
@@ -842,9 +849,9 @@ function updateTray() {
   if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: `Hunt Radar ${VERSION}`, enabled: false },
-    { label: "Open map & settings", click: openMap },
+    { label: `Open map & settings  (${settings.keyMap})`, click: openMap },
     { label: editMode ? `Lock overlay  (${settings.keyEdit})` : `Edit / move overlay  (${settings.keyEdit})`, click: () => setEdit(!editMode) },
-    { label: settings.overlay.mode === "map" ? `Switch to strip  (${settings.keyMode})` : `Switch to mini-map  (${settings.keyMode})`, click: () => setMode(settings.overlay.mode === "map" ? "strip" : "map") },
+    { label: `${overlayHidden ? "Show" : "Hide"} mini-map  (${settings.keyMode})`, click: toggleOverlay },
     { label: "Mark Local area (middle-click lookup)", click: pickArea },
     ...(upd.state === "ready" ? [{ label: `Restart to update to v${upd.version}`, click: () => { app.isQuitting = true; autoUpdater.quitAndInstall(false, true); } }] : [{ label: "Check for updates", enabled: !!(app.isPackaged && autoUpdater), click: () => autoUpdater.checkForUpdates().catch(() => { }) }]),
     { type: "separator" },
@@ -857,7 +864,8 @@ function registerKeys() {
   globalShortcut.unregisterAll();
   const reg = (name, acc, fn) => { if (!acc) return; let ok = false; try { ok = globalShortcut.register(acc, fn); } catch { } keyStatus[name] = ok ? "ok" : `${acc} is taken or invalid`; };
   reg("edit", settings.keyEdit, () => setEdit(!editMode));
-  reg("mode", settings.keyMode, () => setMode(settings.overlay.mode === "map" ? "strip" : "map"));
+  reg("mode", settings.keyMode, toggleOverlay);
+  reg("map", settings.keyMap, toggleMap);
 }
 
 // ------------------------------------------------------------- updates (GitHub Releases), autostart, import
@@ -909,7 +917,8 @@ function statePayload(q) {
   return {
     version: VERSION, status, helper: helperStatus(), heat, heatAt, events: events.filter(e => e.n > since), alerts: alerts.filter(a => a.n > asince),
     chars: charView(), local: localView(), best: bestNearby(), localCounts, settings, chatlogs: chatlog,
-    jump: jumpView().map(j => Object.assign({}, j, { inRange: undefined, inRangeCount: j.inRange.length })), jumpToons: jumpToonsView(), jumpClasses: JUMP, ignoredIds: [...ignored()], watch: { g: [...watchSets().g], t: [...watchSets().t], pg: [...watchSets().pg], pt: [...watchSets().pt] },
+    jump: jumpView().map(j => { const me = activeChar(), ms = me && chars.get(me) && chars.get(me).sys;
+      return Object.assign({}, j, { inRange: undefined, inRangeCount: j.inRange.length, reachesMe: !!ms && j.inRange.includes(ms) }); }), jumpToons: jumpToonsView(), jumpClasses: JUMP, ignoredIds: [...ignored()], watch: { g: [...watchSets().g], t: [...watchSets().t], pg: [...watchSets().pg], pt: [...watchSets().pt] },
     jumpReach: [...new Set(jumpView().flatMap(j => j.inRange))], watchCount: watchSet().size, watchIds: [...watchSet()], sysInfo: sysInfo(),
     ui: { edit: editMode, mode: settings.overlay.mode, keys: keyStatus }, snap, now: now(), update: upd, dataDir: DATA_DIR,
   };
@@ -951,7 +960,7 @@ function startServer() {
       if (u.pathname === "/settings") {
         for (const k in j) if (SETTABLE.has(k)) settings[k] = k === "overlay" || k === "bg" ? Object.assign({}, settings[k] || DEFAULTS[k], j[k]) : j[k];
         saveSettings();
-        if (["keyEdit", "keyMode"].some(k => k in j)) registerKeys();
+        if (["keyEdit", "keyMode", "keyMap"].some(k => k in j)) registerKeys();
         if (["lookupOn", "localArea"].some(k => k in j)) syncHook();
         if ("autostart" in j) applyAutostart();
         if ("overlay" in j && overlay) { overlay.setBounds(overlayBounds()); }
@@ -961,7 +970,7 @@ function startServer() {
       if (u.pathname === "/cmd") {
         const c = j.cmd;
         if (c === "map") openMap(); else if (c === "lock") setEdit(false); else if (c === "edit") setEdit(true);
-        else if (c === "mode") setMode(j.mode || (settings.overlay.mode === "map" ? "strip" : "map"));
+        else if (c === "mode") toggleOverlay();
         else if (c === "pick") pickArea(); else if (c === "picked") savePickedArea(j.rect);
         else if (c === "pickcancel") { if (pickWin && !pickWin.isDestroyed()) pickWin.close(); }
         else if (c === "quit") app.quit();
