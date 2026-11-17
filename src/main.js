@@ -58,6 +58,7 @@ const DEFAULTS = {
   watchJumpsOn: true, watchJumps: 20, watchLyOn: true, watchLy: 16, space: { low: true, null: true, poch: true }, beepGap: 10,
   keyEdit: "Ctrl+Shift+O", keyMode: "Ctrl+Shift+M",
   localArea: null, lookupOn: true,
+  bg: { file: "@default", v: 1, overlay: true, map: false, dim: 0.55, fit: "contain" },   // background image: "@default" = bundled art, else a file copied into the settings folder
   jumpToons: {},                 // (unused since v9.3, kept for old settings files)
   autostart: false,
   esiClientId: "",               // optional: EVE developer app client ID, only for reading ship type
@@ -66,6 +67,7 @@ const DEFAULTS = {
 function loadJSON(p, d) { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return d; } }
 let settings = Object.assign({}, DEFAULTS, loadJSON(SETTINGS_FILE, {}));
 settings.overlay = Object.assign({}, DEFAULTS.overlay, settings.overlay || {});
+settings.bg = Object.assign({}, DEFAULTS.bg, settings.bg || {});
 { const old = loadJSON(SETTINGS_FILE, {});          // v10: camp spots + hunting grounds -> one "watched systems" list
   if (old.watched == null && (old.camp || old.hunt)) settings.watched = [...new Set([old.camp, old.hunt].filter(Boolean).join(",").split(/[,\n;]+/).map(t => t.trim()).filter(Boolean))].join(", "); }
 let saveTimer = null;
@@ -812,6 +814,23 @@ function savePickedArea(r) {
   Object.assign(snap, { msg: "Local area saved — middle-click a name in Local", t: now() });
   if (pickWin && !pickWin.isDestroyed()) pickWin.close();
 }
+// ---- own background image: copied into the settings folder so it survives the original being moved
+function clearBackground() {
+  try { fs.readdirSync(DATA_DIR).filter(f => /^background\./i.test(f)).forEach(f => fs.unlinkSync(path.join(DATA_DIR, f))); } catch { }
+  settings.bg = Object.assign({}, DEFAULTS.bg, settings.bg, { file: null, v: Date.now() });
+}
+async function pickBackground() {
+  const opts = { title: "Pick a background image", properties: ["openFile"], filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }] };
+  const r = mapWin && !mapWin.isDestroyed() ? await dialog.showOpenDialog(mapWin, opts) : await dialog.showOpenDialog(opts);
+  if (r.canceled || !r.filePaths[0]) return;
+  const src = r.filePaths[0], ext = path.extname(src).toLowerCase();
+  try {
+    if (fs.statSync(src).size > 25e6) { Object.assign(snap, { msg: "Background image too big (max 25 MB)", t: now() }); return; }
+    clearBackground();
+    const name = "background" + ext; fs.copyFileSync(src, path.join(DATA_DIR, name));
+    settings.bg = Object.assign({}, DEFAULTS.bg, settings.bg, { file: name, fit: "cover", v: Date.now() }); saveSettings();
+  } catch (e) { Object.assign(snap, { msg: "Couldn't use that image: " + e.message, t: now() }); }
+}
 function trayIcon() {
   const p = path.join(HERE, "icon.png");
   return fs.existsSync(p) ? nativeImage.createFromPath(p) : nativeImage.createEmpty();
@@ -914,6 +933,12 @@ function startServer() {
           .catch(e => send(200, page("Login failed", `<pre>${String(e.message)}</pre>`), "text/html; charset=utf-8"));
         return;
       }
+      if (u.pathname === "/bg") {
+        const bf = settings.bg && settings.bg.file, f = bf === "@default" ? path.join(HERE, "default-bg.webp") : bf && path.join(DATA_DIR, path.basename(bf));
+        if (!f || !fs.existsSync(f)) return send(404, "no background", "text/plain");
+        const ext = path.extname(f).toLowerCase(), type = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif" }[ext] || "application/octet-stream";
+        res.writeHead(200, { "Content-Type": type, "Cache-Control": "max-age=31536000" }); return fs.createReadStream(f).pipe(res);
+      }
       if (u.pathname === "/cardstate") return send(200, JSON.stringify(card.data || {}), "application/json");
       if (u.pathname === "/state") return send(200, JSON.stringify(statePayload(u.searchParams)), "application/json");
       return send(404, "not found", "text/plain");
@@ -921,7 +946,7 @@ function startServer() {
     let body = ""; req.on("data", d => body += d); req.on("end", () => {
       let j = {}; try { j = body ? JSON.parse(body) : {}; } catch { return send(400, "bad json", "text/plain"); }
       if (u.pathname === "/settings") {
-        for (const k in j) if (SETTABLE.has(k)) settings[k] = k === "overlay" ? Object.assign({}, settings.overlay, j[k]) : j[k];
+        for (const k in j) if (SETTABLE.has(k)) settings[k] = k === "overlay" || k === "bg" ? Object.assign({}, settings[k] || DEFAULTS[k], j[k]) : j[k];
         saveSettings();
         if (["keyEdit", "keyMode"].some(k => k in j)) registerKeys();
         if (["lookupOn", "localArea"].some(k => k in j)) syncHook();
@@ -938,6 +963,9 @@ function startServer() {
         else if (c === "pickcancel") { if (pickWin && !pickWin.isDestroyed()) pickWin.close(); }
         else if (c === "quit") app.quit();
         else if (c === "cardclose") hideCard();
+        else if (c === "bgpick") pickBackground();
+        else if (c === "bgclear") { clearBackground(); saveSettings(); }
+        else if (c === "bgdefault") { clearBackground(); settings.bg = Object.assign({}, settings.bg, { file: "@default", fit: "contain", v: Date.now() }); saveSettings(); }
         else if (c === "cardhold") { clearTimeout(card.timer); if (!j.on && card.data && card.data.state === "ok") card.timer = setTimeout(hideCard, 8000); }
         else if (c === "esilogin") openLogin();
         else if (c === "update-check") { if (autoUpdater && app.isPackaged) autoUpdater.checkForUpdates().catch(() => { }); }

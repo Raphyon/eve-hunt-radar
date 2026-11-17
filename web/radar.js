@@ -222,6 +222,23 @@ $("ovEdit").onclick = () => post("/cmd", { cmd: RA.ui && RA.ui.edit ? "lock" : "
 $("ovMode").onclick = () => post("/cmd", { cmd: "mode" });
 $("ovTest").onclick = () => { const AC = new AudioContext(); const t0 = AC.currentTime; let t = t0;
   [[440, 220], [0, 50], [440, 220], [0, 50], [660, 380], [0, 400], [1000, 120], [1400, 120], [1000, 140]].forEach(([f, ms]) => { if (f) { const o = AC.createOscillator(), g = AC.createGain(); o.type = "triangle"; o.frequency.value = f; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.35, t + .015); g.gain.exponentialRampToValueAtTime(.001, t + ms / 1000); o.connect(g).connect(AC.destination); o.start(t); o.stop(t + ms / 1000 + .02); } t += ms / 1000 + .03; }); };
+$("bgPick").onclick = () => post("/cmd", { cmd: "bgpick" });
+$("bgClear").onclick = () => post("/cmd", { cmd: "bgclear" });
+$("bgDef").onclick = () => post("/cmd", { cmd: "bgdefault" });
+$("bgFit").onchange = () => post("/settings", { bg: { fit: $("bgFit").value } });
+$("bgOv").onchange = () => post("/settings", { bg: { overlay: $("bgOv").checked } });
+$("bgMap").onchange = () => post("/settings", { bg: { map: $("bgMap").checked } });
+$("bgDim").oninput = () => { $("bgDimV").textContent = Math.round($("bgDim").value * 100) + "%"; post("/settings", { bg: { dim: +$("bgDim").value } }); };
+let bgKey = null;
+function applyBg(st) {      // big map background + panel state, every poll (cheap: only touches the DOM when it changed)
+  const bg = st.bg || {}, on = !!(bg.file && bg.map), key = [bg.file, bg.v, bg.map, bg.overlay, bg.dim, bg.fit].join(":");
+  if (key === bgKey) return; bgKey = key;
+  $("map").style.backgroundImage = on ? `linear-gradient(rgba(13,16,20,${bg.dim ?? .55}),rgba(13,16,20,${bg.dim ?? .55})),url("/bg?f=${encodeURIComponent(bg.file)}&v=${bg.v}")` : "";
+  $("map").style.backgroundSize = `100% 100%, ${bg.fit === "contain" ? "contain" : "cover"}`; $("map").style.backgroundPosition = "center"; $("map").style.backgroundRepeat = "no-repeat";
+  $("bgFit").value = bg.fit === "contain" ? "contain" : "cover";
+  $("bgClear").disabled = !bg.file; $("bgOv").checked = bg.overlay !== false; $("bgMap").checked = !!bg.map;
+  $("bgDim").value = bg.dim ?? .55; $("bgDimV").textContent = Math.round((bg.dim ?? .55) * 100) + "%";
+}
 $("ovOp").oninput = () => { $("opV").textContent = Math.round($("ovOp").value * 100) + "%"; post("/settings", { overlay: { opacity: +$("ovOp").value } }); };
 $("ovJ").onchange = () => post("/settings", { overlay: { mapJumps: +$("ovJ").value } });
 $("sndOn").onchange = () => post("/settings", { sound: $("sndOn").checked });
@@ -267,7 +284,7 @@ function renderApp(d) {
 }
 let uiLoaded = false;
 function applyUi(d) {
-  RA.ui = d.ui; const st = d.settings;
+  RA.ui = d.ui; const st = d.settings; applyBg(st);
   $("ovEdit").textContent = d.ui.edit ? "Lock overlay 🔒" : "Edit / move overlay";
   const ks = d.ui.keys || {}; $("kEditS").textContent = ks.edit === "ok" ? "✓" : ks.edit || ""; $("kModeS").textContent = ks.mode === "ok" ? "✓" : ks.mode || "";
   const hp = d.helper; $("hlpErr").style.display = hp && hp.ok === false ? "block" : "none";

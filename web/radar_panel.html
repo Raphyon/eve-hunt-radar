@@ -10,6 +10,12 @@
    <h2>Overlay &amp; hotkeys</h2>
    <div class="row"><button id="ovEdit">Edit / move overlay</button><button id="ovMode">Strip ↔ Mini-map</button><button id="ovTest">Test sounds</button></div>
    <label>Overlay opacity <span id="opV" class="sub"></span></label><input id="ovOp" type="range" min="0.4" max="1" step="0.02" style="width:100%">
+   <label>Background image</label>
+   <div class="row"><button id="bgPick">Choose image…</button><button id="bgDef">Default</button><button id="bgClear">Remove</button>
+     <select id="bgFit" style="width:auto"><option value="cover">Fill</option><option value="contain">Fit</option></select></div>
+   <label class="chk"><input type="checkbox" id="bgOv"> On the overlay</label>
+   <label class="chk"><input type="checkbox" id="bgMap"> On the big map</label>
+   <label>Darken image <span id="bgDimV" class="sub"></span></label><input id="bgDim" type="range" min="0" max="0.9" step="0.05" style="width:100%">
    <label>Mini-map radius</label><select id="ovJ"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select>
    <label class="chk"><input type="checkbox" id="sndOn" checked> Alert sounds</label>
    <table class="keys">
