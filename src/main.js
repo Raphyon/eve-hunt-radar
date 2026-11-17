@@ -48,7 +48,8 @@ function bfs(src, maxd = 99) {
 
 // ------------------------------------------------------------- settings
 const DEFAULTS = {
-  camp: "Gonditsa, Ami, Fensi, Vecamia, Ahbazon", hunt: "Beke, Armi, Kihkounad", ignore: "",
+  watched: "Gonditsa, Ami, Fensi, Vecamia, Ahbazon, Beke, Armi, Kihkounad", ignore: "",
+  camp: null, hunt: null,          // pre-v10, merged into "watched" on load
   classes: { BS: true, MAR: true, BLOPS: true, T3C: true, CAP: true, BC: true, CMD: true, ICS: true, EXH: true },
   victim: true, range: 3, sound: true, near: true, nearRange: 5, chatlogs: "",
   // v10: watch range (kills outside are dropped before any lookup) and space bands
@@ -63,6 +64,8 @@ const DEFAULTS = {
 function loadJSON(p, d) { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return d; } }
 let settings = Object.assign({}, DEFAULTS, loadJSON(SETTINGS_FILE, {}));
 settings.overlay = Object.assign({}, DEFAULTS.overlay, settings.overlay || {});
+{ const old = loadJSON(SETTINGS_FILE, {});          // v10: camp spots + hunting grounds -> one "watched systems" list
+  if (old.watched == null && (old.camp || old.hunt)) settings.watched = [...new Set([old.camp, old.hunt].filter(Boolean).join(",").split(/[,\n;]+/).map(t => t.trim()).filter(Boolean))].join(", "); }
 let saveTimer = null;
 function saveSettings() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { try { fs.writeFileSync(SETTINGS_FILE + ".tmp", JSON.stringify(settings, null, 1)); fs.renameSync(SETTINGS_FILE + ".tmp", SETTINGS_FILE); } catch (e) { log("settings save failed:", e.message); } }, 300); }
 
@@ -123,7 +126,7 @@ function parseTargets(txt) {
 let ignCache = { txt: null, set: new Set() };
 function ignored() { if (ignCache.txt !== settings.ignore) ignCache = { txt: settings.ignore, set: parseTargets(settings.ignore) }; return ignCache.set; }
 function runningChars() { return [...chars.entries()].filter(([, c]) => c.running !== false); }
-function anchors() { const a = new Set([...parseTargets(settings.camp), ...parseTargets(settings.hunt)]); runningChars().forEach(([, c]) => { if (SYS[c.sys]) a.add(c.sys); }); return a; }
+function anchors() { const a = new Set(parseTargets(settings.watched)); runningChars().forEach(([, c]) => { if (SYS[c.sys]) a.add(c.sys); }); return a; }
 function nearestAnchor(sid) {
   const A = anchors(); if (!A.size || !SYS[sid]) return [99, "-"];
   const d = bfs(sid, 12); let best = [99, null];
@@ -161,7 +164,7 @@ function maybeAlert(ev) {
   const R = +settings.nearRange || 5;
   const meDist = SYS[mySys] ? (bfs(mySys, Math.max(R, 40)).get(ev.sys) ?? null) : null;
   const nearMe = meDist !== null && meDist <= R;
-  const T = new Set([...parseTargets(settings.camp), ...parseTargets(settings.hunt)]);
+  const T = parseTargets(settings.watched);
   let tDist = 99, tName = null;
   if (watched && T.size) { const d = bfs(ev.sys, +settings.range || 3); T.forEach(t => { if (d.has(t) && d.get(t) < tDist) { tDist = d.get(t); tName = SYS[t].n; } }); }
   const nearTarget = watched && tName !== null;
@@ -227,7 +230,7 @@ async function heatLoop() {
 
 // ------------------------------------------------------------- best hunting spots near you
 function bestNearby(maxj = 6, n = 8) {
-  const src = primarySys(); const origins = src ? [src] : [...parseTargets(settings.camp)];
+  const src = primarySys(); const origins = src ? [src] : [...parseTargets(settings.watched)];
   if (!origins.length) return [];
   const dist = new Map(); origins.forEach(o => bfs(o, maxj).forEach((v, k) => dist.set(k, Math.min(dist.get(k) ?? 99, v))));
   const recent = {}; const t0 = now();

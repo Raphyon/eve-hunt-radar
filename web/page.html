@@ -64,20 +64,19 @@ select{width:100%;background:#0d1014;color:var(--txt);border:1px solid var(--lin
 
   <h2>Legend</h2>
   <div class="leg">
-   <span class="sw" style="background:transparent;border:3px solid var(--camp)"></span><span>Camp spot (gate camp)</span>
-   <span class="sw" style="background:transparent;border:3px solid var(--hunt)"></span><span>Hunting ground</span>
+   <span class="sw" style="background:transparent;border:3px solid var(--camp)"></span><span>Watched system</span>
    <span class="sw" style="background:#5a2e0e;border:1.5px solid #b8621f"></span><span>Lowsec</span>
    <span class="sw" style="height:0;border-top:2px dashed #5b636d"></span><span>Gate across a region border</span>
    __RADARLEGEND__
   </div>
 
   <h2>Targets</h2>
-  <label>Camp spots (systems)</label>
-  <textarea id="tCamp" rows="2"></textarea>
-  <label>Hunting grounds (systems or constellation names)</label>
-  <textarea id="tHunt" rows="2"></textarea>
+  <label>Watched systems (systems, constellations or regions)</label>
+  <textarea id="tCamp" rows="3"></textarea>
+  <div class="sub">Watched ships killing within a few jumps of these beep, wherever you are.</div>
   <label>Ignore (no alerts, not in Best nearby, dimmed)</label>
-  <textarea id="tIgn" rows="2" placeholder="systems or constellation names"></textarea>
+  <textarea id="tIgn" rows="2" placeholder="systems, constellations or regions"></textarea>
+  <div class="sub" id="ignWarn" style="color:#ff9a2b"></div>
   <div class="row"><button id="apply">Apply</button><button id="defaults">Defaults</button></div>
   <label class="chk"><input type="checkbox" id="cDim"> Dim everything &gt; 2 jumps from targets</label>
   <label class="chk"><input type="checkbox" id="cStubs" checked> Show exits to other regions</label>
@@ -90,8 +89,7 @@ select{width:100%;background:#0d1014;color:var(--txt);border:1px solid var(--lin
 </div>
 <script>
 const DATA = __DATA__;
-const DEF_CAMP = "Gonditsa, Ami, Fensi, Vecamia, Ahbazon";
-const DEF_HUNT = "Beke, Armi, Kihkounad";
+const DEF_CAMP = "Gonditsa, Ami, Fensi, Vecamia, Ahbazon, Beke, Armi, Kihkounad";
 const SX = 1.55, SY = 1.25;
 const S = {}; DATA.sys.forEach(s => { s.x0 = s.x * SX; s.y0 = s.y * SY; s.px = s.x0; s.py = s.y0; S[s.id] = s; });
 const ADJ = {}; DATA.sys.forEach(s => ADJ[s.id] = []);
@@ -124,9 +122,11 @@ function parseList(txt, allowConst) {
   return [out, bad];
 }
 function computeTargets() {
-  const [c, b1] = parseList($("tCamp").value, true), [h, b2] = parseList($("tHunt").value, true);
-  camp = c; hunt = h;
-  const bad = b1.concat(b2);
+  const [c, b1] = parseList($("tCamp").value, true), [ig] = parseList(($("tIgn") || {}).value || "", true);
+  camp = c; hunt = new Set();
+  const bad = b1;
+  const both = [...c].filter(id => ig.has(id)).map(id => S[id].n);
+  if ($("ignWarn")) $("ignWarn").textContent = both.length ? `Both watched and ignored (ignore wins): ${both.join(", ")}` : "";
   $("apply").textContent = bad.length ? "Apply (unknown: " + bad.join(", ") + ")" : "Apply";
   const T = new Set([...camp, ...hunt]);
   // multi-source BFS distance to any target
@@ -140,7 +140,7 @@ function computeTargets() {
     const n2 = new Set(); ADJ[s.id].forEach(v => ADJ[v].forEach(w => { if (T.has(w) && !n1.has(w)) n2.add(w); }));
     eyes.set(s.id, { n1: [...n1], n2: n2.size });
   });
-  try { localStorage.setItem("hm_t", JSON.stringify([$("tCamp").value, $("tHunt").value])); } catch (e) {}
+
 }
 
 // region backdrops
@@ -206,7 +206,6 @@ function drawNodes() {
     el("rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: 7, fill: low ? "#5a2e0e" : "#1a1f25", stroke: secColours ? secCol(s.s) : low ? "#b8621f" : "#3a424b", "stroke-width": low || secColours ? 1.6 : 1 }, grp);
     const t = el("text", { y: -1, "text-anchor": "middle", "font-size": 11, "font-weight": hot ? 800 : 600, fill: hot ? "#fff" : "#b9c1ca" }, grp); t.textContent = s.n;
     const t2 = el("text", { y: 10.5, "text-anchor": "middle", "font-size": 8, fill: "#7f8a96" }, grp); t2.textContent = dispSec(s.s).toFixed(1) + " · " + s.c;
-    if (isC) { const tt = el("text", { y: -h / 2 - 11, "text-anchor": "middle", "font-size": 10, "font-weight": 800, fill: "#ff3b3b" }, grp); tt.textContent = "CAMP"; }
     if (dim && !(dist[s.id] <= 2)) grp.setAttribute("opacity", .22);
     if (window.IGNORED && window.IGNORED.has(s.id)) grp.setAttribute("opacity", .28);
     if (window.radarNode) radarNode(s, grp, w, h);
@@ -224,7 +223,7 @@ function renderEyes() { return;
 
 function select(id, center) {
   const s = S[id];
-  const role = camp.has(id) ? '<span class="tag" style="background:#ff3b3b;color:#000">camp</span>' : hunt.has(id) ? '<span class="tag" style="background:#ffb020;color:#000">hunt</span>' : "";
+  const role = camp.has(id) ? '<span class="tag" style="background:#ff3b3b;color:#000">watched</span>' : hunt.has(id) ? '<span class="tag" style="background:#ffb020;color:#000">hunt</span>' : "";
   const nb = ADJ[id].map(v => `<a href="#" data-id="${v}" style="color:${camp.has(v) ? "#ff6b6b" : hunt.has(v) ? "#ffc04d" : "#9cc9ff"}">${S[v].n}</a> <span class="sub">${dispSec(S[v].s).toFixed(1)}</span>`).join("<br>");
   const ex = DATA.stubs.filter(t => t.f === id).map(t => `${t.n} <span class="sub">(${t.r})</span>`).join("<br>");
   const ign = window.IGNORED && window.IGNORED.has(id);
@@ -278,13 +277,13 @@ $("search").addEventListener("input", e => e.target.style.borderColor = "");
 
 function renderAll() { computeTargets(); drawRegions(); drawEdges(); drawStubs(); drawNodes(); renderEyes(); }
 $("apply").onclick = renderAll;
-$("defaults").onclick = () => { $("tCamp").value = DEF_CAMP; $("tHunt").value = DEF_HUNT; renderAll(); };
+$("defaults").onclick = () => { $("tCamp").value = DEF_CAMP; renderAll(); };
 ["cDim"].forEach(id => $(id).onchange = () => { drawNodes(); });
 $("cSec").onchange = () => { secColours = $("cSec").checked; drawNodes(); };
 $("cStubs").onchange = drawStubs;
 
 let st = null; try { st = JSON.parse(localStorage.getItem("hm_t")); } catch (e) {}
-$("tCamp").value = st ? st[0] : DEF_CAMP; $("tHunt").value = st ? st[1] : DEF_HUNT;
+$("tCamp").value = DEF_CAMP;
 renderAll(); fit();
 __RADARJS__
 window.addEventListener("resize", fit);

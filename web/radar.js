@@ -6,12 +6,12 @@ let clsOn = {}; Object.keys(CLS).forEach(k => clsOn[k] = true);
 $("classes").innerHTML = Object.entries(CLS).map(([k, v]) => `<label class="chk"><input type="checkbox" data-k="${k}" checked> ${v}</label>`).join("");
 $("classes").querySelectorAll("input").forEach(i => i.onchange = () => { clsOn[i.dataset.k] = i.checked; pushSettings(); renderFeed(); drawPulses(); });
 function pushSettings() {
-  fetch("/settings", { method: "POST", body: JSON.stringify({ camp: $("tCamp").value, hunt: $("tHunt").value, ignore: $("tIgn").value, classes: clsOn, victim: $("pVictim").checked, range: +$("pRange").value, near: $("pNear").checked, nearRange: +$("pNearR").value,
+  fetch("/settings", { method: "POST", body: JSON.stringify({ watched: $("tCamp").value, ignore: $("tIgn").value, classes: clsOn, victim: $("pVictim").checked, range: +$("pRange").value, near: $("pNear").checked, nearRange: +$("pNearR").value,
     watchJumpsOn: $("wJOn").checked, watchJumps: +$("wJ").value || 20, watchLyOn: $("wLOn").checked, watchLy: +$("wL").value || 16,
     space: { low: $("spL").checked, null: $("spN").checked, poch: $("spP").checked }, beepGap: +$("bGap").value }) }).catch(() => {});
 }
 function applySettings(st) {
-  $("tCamp").value = st.camp; $("tHunt").value = st.hunt; $("tIgn").value = st.ignore || ""; $("pVictim").checked = !!st.victim; $("pRange").value = String(st.range); $("pNear").checked = st.near !== false; $("pNearR").value = String(st.nearRange || 5);
+  $("tCamp").value = st.watched || ""; $("tIgn").value = st.ignore || ""; $("pVictim").checked = !!st.victim; $("pRange").value = String(st.range); $("pNear").checked = st.near !== false; $("pNearR").value = String(st.nearRange || 5);
   $("wJOn").checked = st.watchJumpsOn !== false; $("wJ").value = st.watchJumps || 20; $("wLOn").checked = st.watchLyOn !== false; $("wL").value = st.watchLy || 16;
   const sp = st.space || {}; $("spL").checked = sp.low !== false; $("spN").checked = sp.null !== false; $("spP").checked = sp.poch !== false; $("bGap").value = String(st.beepGap ?? 10);
   Object.keys(CLS).forEach(k => { clsOn[k] = st.classes[k] !== false; const i = $("classes").querySelector(`[data-k=${k}]`); if (i) i.checked = clsOn[k]; });
@@ -22,6 +22,7 @@ const _apply = $("apply").onclick; $("apply").onclick = () => { _apply(); pushSe
 const _defs = $("defaults").onclick; $("defaults").onclick = () => { _defs(); pushSettings(); };
 $("pVictim").onchange = () => { pushSettings(); renderFeed(); drawPulses(); };
 $("pRange").onchange = pushSettings;
+$("tIgn").addEventListener("input", () => computeTargets());
 ["wJOn", "wJ", "wLOn", "wL", "spL", "spN", "spP", "bGap"].forEach(id => $(id).addEventListener("change", pushSettings)); $("pNear").onchange = pushSettings; $("pNearR").onchange = pushSettings;
 
 const watched = p => { const c = GC[p.group]; return c && clsOn[c]; };
