@@ -2,66 +2,144 @@
 <html><head><meta charset="utf-8"><title>Pilot</title>
 <style>
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:transparent;overflow:hidden;font:12px/1.35 "Segoe UI",system-ui,sans-serif;color:#e6ebf0;user-select:none}
-#c{position:absolute;inset:0;border-radius:12px;background:rgba(10,13,17,.92);border:1px solid rgba(255,255,255,.12);padding:10px 12px;display:flex;flex-direction:column;gap:6px;overflow:hidden}
-#c>*{flex-shrink:0}
-.hd{display:flex;align-items:flex-start;gap:8px}
-.nm{font-size:15px;font-weight:800;line-height:1.2}
-.co{color:#8b96a2;font-size:11.5px}
-.x{margin-left:auto;cursor:pointer;color:#8b96a2;font-size:18px;line-height:1;padding:2px 8px;border-radius:6px}.x:hover{color:#fff;background:rgba(255,255,255,.1)}
-.bar{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}.bar i{display:block;height:100%}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
-.grid b{display:block;font-size:15px}.grid span{color:#8b96a2;font-size:10.5px}
-h4{margin:2px 0 0;font-size:10px;letter-spacing:.08em;color:#8b96a2;text-transform:uppercase}
-.ln{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35}
-.amb{color:#ffb020}.pnk{color:#ff3bd4;font-weight:700}.mut{color:#8b96a2}
-a{color:#9cc9ff;text-decoration:none}a:hover{text-decoration:underline}
-.ft{margin-top:auto;display:flex;justify-content:space-between;align-items:center}
-.spin{color:#8b96a2;font-size:13px;margin:auto 0;text-align:center}
-</style></head><body><div id="c"><div class="spin">…</div></div>
+html,body{margin:0;height:100%;background:transparent;overflow:hidden;font:12.5px/1.4 "Segoe UI",system-ui,sans-serif;color:#dfe5ec;user-select:none}
+#c{position:absolute;inset:0;border-radius:14px;background:linear-gradient(180deg,rgba(22,27,35,.96),rgba(12,15,20,.96));border:1px solid rgba(255,255,255,.10);box-shadow:inset 0 1px 0 rgba(255,255,255,.05);display:flex;flex-direction:column;overflow:hidden}
+a{color:inherit;text-decoration:none;cursor:pointer}
+a:hover{color:#fff;text-decoration:underline;text-decoration-color:rgba(255,255,255,.35)}
+.mut{color:#8a95a1}.dim{color:#6b7580}
+/* header */
+.hd{display:flex;gap:10px;padding:11px 12px 9px;position:relative}
+.por{width:52px;height:52px;border-radius:10px;flex:none;background:#1c232c center/cover;border:1px solid rgba(255,255,255,.12)}
+.who{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+.nm{font-size:16px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:26px}
+.org{display:flex;align-items:center;gap:6px;color:#aab4bf;font-size:12px;min-width:0}
+.org span,.org a{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.logo{width:18px;height:18px;border-radius:4px;flex:none;background:#1c232c center/cover}
+.x{position:absolute;top:10px;right:10px;width:26px;height:26px;display:grid;place-items:center;border-radius:7px;color:#8a95a1;font-size:15px;cursor:pointer}
+.x:hover{background:rgba(255,255,255,.08);color:#fff}
+/* danger */
+.dg{padding:0 12px 8px}
+.dgl{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+.pill{font-weight:700;font-size:11.5px;padding:2px 8px;border-radius:999px}
+.bar{height:5px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden}.bar i{display:block;height:100%;border-radius:3px}
+/* stats */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:0 12px 9px}
+.tile{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:4px 3px;text-align:center}
+.tile b{display:block;font-size:15px;color:#fff;font-weight:650}.tile span{font-size:10.5px;color:#8a95a1}
+/* body */
+.bd{flex:1;overflow-y:auto;padding:0 12px 4px;border-top:1px solid rgba(255,255,255,.06)}
+.bd::-webkit-scrollbar{width:6px}.bd::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:3px}
+h4{margin:9px 0 4px;font-size:10.5px;font-weight:650;letter-spacing:.09em;color:#8a95a1;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+h4 .ic{font-size:12px;letter-spacing:0}
+h4 small{text-transform:none;letter-spacing:0;font-weight:400;color:#6b7580}
+.row{display:flex;align-items:center;gap:8px;padding:3px 6px;margin:0 -6px;border-radius:8px}
+.row:hover{background:rgba(255,255,255,.05)}
+.ship{width:28px;height:28px;border-radius:6px;flex:none;background:#1c232c center/cover;border:1px solid rgba(255,255,255,.08)}
+.rt{min-width:0;flex:1}
+.r1,.r2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r1{color:#eef2f6}.r2{font-size:11.5px;color:#8a95a1}
+.tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:4px;margin-right:5px;vertical-align:1px}
+.kill{background:rgba(61,220,132,.14);color:#4fe08f}.loss{background:rgba(255,77,77,.14);color:#ff6b6b}
+.att{background:rgba(255,176,32,.14);color:#ffb020}.wat{background:rgba(255,59,212,.16);color:#ff5ad9}
+.go{color:#6b7580;font-size:13px;padding:0 2px}.row:hover .go{color:#9cc9ff}
+.sum{display:flex;gap:14px;margin-bottom:4px;font-size:12px}.sum b{color:#fff}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:flex;align-items:center;gap:6px;padding:3px 9px 3px 3px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.06);font-size:12px}
+.chip.ns{padding-left:9px}
+.chip:hover{background:rgba(255,255,255,.09);text-decoration:none}
+.chip .ship{width:20px;height:20px;border-radius:50%}
+.chip em{font-style:normal;color:#8a95a1;font-size:11px}
+.note{color:#8a95a1;padding:4px 0}
+/* footer */
+.ft{display:flex;align-items:center;gap:6px;padding:7px 12px 9px;border-top:1px solid rgba(255,255,255,.06)}
+.btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:7px;background:rgba(156,201,255,.10);color:#9cc9ff;font-size:12px;font-weight:600}
+.btn:hover{background:rgba(156,201,255,.18);text-decoration:none;color:#cfe4ff}
+.ft .mut{margin-left:auto;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spin{margin:auto;color:#8a95a1;font-size:13px;display:flex;align-items:center;gap:8px}
+.spin i{width:14px;height:14px;border:2px solid rgba(255,255,255,.15);border-top-color:#9cc9ff;border-radius:50%;animation:r .8s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+</style></head><body><div id="c"><div class="spin"><i></i>…</div></div>
 <script>
+let IMG = "https://images.evetech.net";
 const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const n = v => v == null ? "–" : v >= 1e9 ? (v / 1e9).toFixed(1) + "b" : v >= 1e6 ? Math.round(v / 1e6) + "m" : v >= 1e4 ? Math.round(v / 1e3) + "k" : String(v);
+const isk = v => !v ? "" : v >= 1e9 ? (v / 1e9).toFixed(1) + "b ISK" : v >= 1e6 ? Math.round(v / 1e6) + "m ISK" : Math.round(v / 1e3) + "k ISK";
 const ago = t => { const s = (Date.now() - Date.parse(t)) / 1000; return s < 5400 ? Math.round(s / 60) + "m" : s < 172800 ? Math.round(s / 3600) + "h" : Math.round(s / 86400) + "d"; };
+// EVE's security colours (1.0 … 0.0 and below)
+const SEC = ["#f00000", "#d73000", "#f04800", "#f06000", "#d77700", "#efef00", "#8fef2f", "#00f000", "#00ef47", "#48f0c0", "#2fefef"];
+const secCol = s => s == null ? "#8a95a1" : SEC[Math.max(0, Math.min(10, Math.round(s * 10)))];
+const secTxt = s => s == null ? "" : `<b style="color:${secCol(s)};font-weight:600">${s.toFixed(1)}</b>`;
+const L = (href, inner, cls = "") => `<a href="${esc(href)}" target="_blank"${cls ? ` class="${cls}"` : ""}>${inner}</a>`;
+const img = (url, cls) => `<div class="${cls}" style="background-image:url('${url}')"></div>`;
+const shipImg = (id, cls = "ship") => id ? img(`${IMG}/types/${id}/icon?size=64`, cls) : `<div class="${cls}"></div>`;
+const dotlan = sys => `https://evemaps.dotlan.net/system/${encodeURIComponent(String(sys).replace(/ /g, "_"))}`;
+const sysLink = (name, sec) => `${L(dotlan(name), esc(name))} ${secTxt(sec)}`;
 const close = () => fetch("/cmd", { method: "POST", body: JSON.stringify({ cmd: "cardclose" }) });
+const hold = on => fetch("/cmd", { method: "POST", body: JSON.stringify({ cmd: "cardhold", on }) }).catch(() => { });
+
 function actHtml(a) {
   if (!a) return "";
-  if (a.loading) return `<h4>Recent activity</h4><div class="mut">checking last 7 / 30 / 90 days…</div>`;
-  if (!a.recent || !a.recent.length) return `<h4>Recent activity</h4><div class="mut">No PvP in the last 90 days</div>`;
-  const head = `<h4>Last ${a.days} days${a.days > 7 ? ` <span style="text-transform:none;letter-spacing:0">(nothing in the last ${a.days === 30 ? 7 : 30})</span>` : ""}</h4>`;
-  const sum = `<div class="ln"><b>${a.kills}${a.more ? "+" : ""}</b> kills · <b>${a.losses}</b> losses</div>`;
-  const rows = a.recent.map(r => `<div class="ln"><span class="${r.lost ? "mut" : "amb"}">${r.lost ? "lost" : "kill"}</span> ${esc(r.ship)} @ <a href="${esc(r.link)}" target="_blank">${esc(r.sys)}</a> <span class="mut">${r.sec != null ? r.sec.toFixed(1) : ""} · ${ago(r.t)} ago</span></div>`).join("");
+  if (a.loading) return `<h4><span class="ic">⏱</span>Recent activity</h4><div class="spin" style="margin:6px 0"><i></i>checking last 7 / 30 / 90 days…</div>`;
+  if (!a.recent || !a.recent.length) return `<h4><span class="ic">⏱</span>Recent activity</h4><div class="note">No PvP in the last 90 days</div>`;
+  const head = `<h4><span class="ic">⏱</span>Last ${a.days} days${a.days > 7 ? ` <small>nothing in the last ${a.days === 30 ? 7 : 30}</small>` : ""}</h4>`;
+  const sum = `<div class="sum"><span><b>${a.kills}${a.more ? "+" : ""}</b> <span class="mut">kills</span></span><span><b>${a.losses}</b> <span class="mut">losses</span></span></div>`;
+  const rows = a.recent.map(r => `<div class="row">${shipImg(r.type)}<div class="rt">
+      <div class="r1"><span class="tag ${r.lost ? "loss" : "kill"}">${r.lost ? "LOSS" : "KILL"}</span>${esc(r.ship)}</div>
+      <div class="r2">${sysLink(r.sys, r.sec)}${r.region ? ` <span class="dim">· ${esc(r.region)}</span>` : ""} · ${ago(r.t)} ago${r.value ? ` · ${isk(r.value)}` : ""}</div>
+    </div>${L(r.link, "↗", "go")}</div>`).join("");
   return head + sum + rows;
 }
+function seenHtml(list) {
+  if (!list || !list.length) return "";
+  return `<h4><span class="ic">👁</span>Seen here recently</h4>` + list.map(z => `<div class="row">${shipImg(z.type)}<div class="rt">
+      <div class="r1"><span class="tag ${z.watched && z.role === "attacker" ? "wat" : z.role === "victim" ? "loss" : "att"}">${z.role === "victim" ? "DIED" : "ON KILL"}</span>${esc(z.ship)}</div>
+      <div class="r2">${sysLink(z.sys, z.sec)} · ${ago(z.t)} ago</div></div></div>`).join("");
+}
+function topHtml(s) {
+  let h = "";
+  if ((s.ships || []).length) h += `<h4><span class="ic">🚀</span>Top ships</h4><div class="chips">` + s.ships.map(z =>
+    L(z.id ? `https://zkillboard.com/ship/${z.id}/` : "https://zkillboard.com/", `${z.id ? shipImg(z.id) : ""}${esc(z.name)}${z.kills != null ? ` <em>${z.kills}</em>` : ""}`, "chip" + (z.id ? "" : " ns"))).join("") + `</div>`;
+  if ((s.systems || []).length) h += `<h4><span class="ic">📍</span>Top systems</h4><div class="chips">` + s.systems.map(z =>
+    L(dotlan(z.name), `${esc(z.name)}${z.kills != null ? ` <em>${z.kills}</em>` : ""}`, "chip ns")).join("") + `</div>`;
+  return h;
+}
+
 let v = 0;
 async function poll() {
-  try {
-    const d = await (await fetch("/cardstate")).json();
-    if (d.v && d.v !== v) { v = d.v; render(d); }
-  } catch (e) { }
+  try { const d = await (await fetch("/cardstate")).json(); if (d.v && d.v !== v) { v = d.v; render(d); } } catch (e) { }
 }
 function render(d) {
+  if (d.img) IMG = d.img;
   const C = document.getElementById("c");
-  const x = `<span class="x" id="x">✕</span>`;
-  if (d.state === "reading" || d.state === "loading") { C.innerHTML = `<div class="hd"><div class="nm">${esc(d.name || "Reading Local…")}</div>${x}</div><div class="spin">${d.state === "reading" ? "reading the name…" : "looking up zKillboard…"}</div>`; }
-  else if (d.state === "error") { C.innerHTML = `<div class="hd"><div class="nm">Couldn't look that up</div>${x}</div><div class="mut">${esc(d.msg)}</div><div class="mut">Tip: middle-click right on the name text. Wider Local / bigger font helps the OCR.</div>`; }
-  else {
-    const s = d.st || {}, dg = s.danger, col = dg == null ? "#59626c" : dg >= 70 ? "#ff3b30" : dg >= 40 ? "#ff9a2b" : "#3ddc84";
-    C.innerHTML = `<div class="hd"><div><div class="nm">${esc(d.name)}</div><div class="co">${esc(d.corp || "")}${d.alli ? " · " + esc(d.alli) : ""}</div></div>${x}</div>
-      <div><div class="ln"><b style="color:${col}">${dg == null ? "no zKill danger rating" : "Danger " + dg + "%"}</b>${s.gang != null ? ` <span class="mut">· gang ${s.gang}% · solo ${100 - s.gang}%</span>` : ""}</div>
-      <div class="bar"><i style="width:${dg ?? 0}%;background:${col}"></i></div></div>
-      <div class="grid"><div><b>${n(s.kills)}</b><span>kills</span></div><div><b>${n(s.losses)}</b><span>losses</span></div><div><b>${n(s.solo)}</b><span>solo</span></div><div><b>${n(s.active)}</b><span>kills 7d</span></div></div>
-      ${(d.seen || []).length ? `<h4>Seen here recently</h4>` + d.seen.map(z => `<div class="ln ${z.watched && z.role === "attacker" ? "pnk" : "amb"}">${z.role} in ${esc(z.ship)} @ ${esc(z.sys)} · ${ago(z.t)} ago</div>`).join("") : ""}
-      ${actHtml(d.act)}
-      ${(s.ships || []).length ? `<h4>Top ships</h4><div class="ln">${s.ships.map(z => esc(z.name) + (z.kills != null ? ` <span class="mut">${z.kills}</span>` : "")).join(" · ")}</div>` : ""}
-      ${(s.systems || []).length ? `<h4>Top systems</h4><div class="ln">${s.systems.map(z => esc(z.name) + (z.kills != null ? ` <span class="mut">${z.kills}</span>` : "")).join(" · ")}</div>` : ""}
-      <div class="ft"><span class="mut">${d.readAs ? `read "${esc(d.readAs)}" → corrected` : d.zk ? "zKillboard stats" : "zKill unavailable"}</span><a href="${esc(d.link)}" target="_blank">open zKill ↗</a></div>`;
+  const x = `<span class="x" id="x" title="Close (Esc)">✕</span>`;
+  if (d.state === "reading" || d.state === "loading") {
+    C.innerHTML = `<div class="hd"><div class="por"></div><div class="who"><div class="nm">${esc(d.name || "Reading Local…")}</div></div>${x}</div>
+      <div class="spin"><i></i>${d.state === "reading" ? "reading the name…" : "looking up zKillboard…"}</div>`;
+  } else if (d.state === "error") {
+    C.innerHTML = `<div class="hd"><div class="who"><div class="nm">Couldn't look that up</div><div class="mut">${esc(d.msg)}</div></div>${x}</div>
+      <div class="bd" style="border:0"><div class="note">Tip: middle-click right on the name text. Wider Local / bigger font helps the OCR.</div></div>`;
+  } else {
+    const s = d.st || {}, dg = s.danger, col = dg == null ? "#59626c" : dg >= 70 ? "#ff4d4d" : dg >= 40 ? "#ff9a2b" : "#3ddc84";
+    const zk = `https://zkillboard.com/character/${d.id}/`, ew = `https://evewho.com/character/${d.id}`;
+    const org = (id, nm, kind) => id ? `<div class="org">${img(`${IMG}/${kind}s/${id}/logo?size=64`, "logo")}${L(`https://zkillboard.com/${kind}/${id}/`, esc(nm || "?"))}</div>` : "";
+    C.innerHTML = `<div class="hd">${L(zk, img(`${IMG}/characters/${d.id}/portrait?size=128`, "por"))}
+        <div class="who"><div class="nm">${L(zk, esc(d.name))}</div>${org(d.corpId, d.corp, "corporation")}${org(d.alliId, d.alli, "alliance")}</div>${x}</div>
+      <div class="dg"><div class="dgl"><span class="pill" style="color:${col};background:${col}22">${dg == null ? "no danger rating" : "Danger " + dg + "%"}</span>
+        ${s.gang != null ? `<span class="mut">gang ${s.gang}% · solo ${100 - s.gang}%</span>` : ""}</div>
+        <div class="bar"><i style="width:${dg ?? 0}%;background:${col}"></i></div></div>
+      <div class="grid"><div class="tile"><b>${n(s.kills)}</b><span>kills</span></div><div class="tile"><b>${n(s.losses)}</b><span>losses</span></div>
+        <div class="tile"><b>${n(s.solo)}</b><span>solo</span></div><div class="tile"><b>${n(s.active)}</b><span>kills 7d</span></div></div>
+      <div class="bd">${seenHtml(d.seen)}${actHtml(d.act)}${topHtml(s)}</div>
+      <div class="ft">${L(zk, "zKillboard ↗", "btn")}${L(ew, "EVE Who ↗", "btn")}
+        <span class="mut">${d.readAs ? `read "${esc(d.readAs)}" → fixed` : d.zk ? "" : "zKill unavailable"}</span></div>`;
   }
   const xb = document.getElementById("x"); if (xb) xb.addEventListener("mousedown", e => { e.preventDefault(); close(); });
 }
-// close on: ✕, Esc, right-click or double-click anywhere on the card (links still work)
+// close on: ✕, Esc, right-click, double-click (links still work). Card stays open while the mouse is on it.
 document.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
 document.addEventListener("contextmenu", e => { e.preventDefault(); close(); });
-document.addEventListener("dblclick", close);
+document.addEventListener("dblclick", e => { if (!e.target.closest("a")) close(); });
+document.documentElement.addEventListener("mouseenter", () => hold(true));
+document.documentElement.addEventListener("mouseleave", () => hold(false));
 poll(); setInterval(poll, 300);
 </script></body></html>

@@ -656,7 +656,8 @@ function pickTop(list, n = 3) {
   // zKill topLists entries: pull a readable name + count from whatever fields are present
   return (list || []).slice(0, n).map(v => {
     const nameKey = Object.keys(v).find(k => /name$/i.test(k) && typeof v[k] === "string" && !/corporation|alliance|faction|region/i.test(k)) || Object.keys(v).find(k => /name$/i.test(k));
-    return { name: v[nameKey] || "?", kills: v.kills ?? v.count ?? null };
+    const idKey = Object.keys(v).find(k => /^(shipTypeID|solarSystemID|typeID|id)$/i.test(k));
+    return { name: v[nameKey] || "?", kills: v.kills ?? v.count ?? null, id: idKey ? v[idKey] : null };
   });
 }
 async function lookupPilot(name, at, seq = ++card.seq, readAs = null) {
@@ -677,8 +678,8 @@ async function lookupPilot(name, at, seq = ++card.seq, readAs = null) {
     solo: zz.soloKills ?? null, isk: zz.iskDestroyed ?? null, active: zz.activepvp && zz.activepvp.kills ? zz.activepvp.kills.count ?? null : null,
     ships: pickTop(listBy(/ship/i)), systems: pickTop(listBy(/system/i)) };
   zstats.set(ch.id, { danger: st.danger, gang: st.gang, kills: st.kills, losses: st.losses });
-  const sn = (seen.get(ch.id) || []).slice(0, 3).map(x => ({ role: x.role, ship: x.ship, sys: SYS[x.sys] ? SYS[x.sys].n : x.sys, t: x.t, watched: isWatched(x) }));
-  const base = { state: "ok", at, readAs, id: ch.id, name: ch.name, corp: names.get(a.corporation_id), alli: names.get(a.alliance_id), st, seen: sn, zk: c3 === 200,
+  const sn = (seen.get(ch.id) || []).slice(0, 3).map(x => ({ role: x.role, ship: x.ship, type: x.type, sysId: x.sys, sys: SYS[x.sys] ? SYS[x.sys].n : x.sys, sec: SYS[x.sys] ? dispSec(SYS[x.sys].s) : null, t: x.t, watched: isWatched(x) }));
+  const base = { state: "ok", at, readAs, id: ch.id, name: ch.name, corpId: a.corporation_id || null, alliId: a.alliance_id || null, corp: names.get(a.corporation_id), alli: names.get(a.alliance_id), st, seen: sn, zk: c3 === 200,
     link: `https://zkillboard.com/character/${ch.id}/`, act: { loading: true } };
   showCard(base);
   const act = await recentActivity(ch.id);
@@ -722,7 +723,7 @@ async function recentActivity(cid) {
         const me = lost ? km.victim : (km.attackers || []).find(x => x.character_id === cid) || {};
         const [, shipName] = await shipInfo(me.ship_type_id);
         const s = SYS[km.solar_system_id];
-        rows.push({ t: km.killmail_time, lost, ship: shipName, sys: s ? s.n : String(km.solar_system_id), sec: s ? dispSec(s.s) : null, region: s ? s.r : null,
+        rows.push({ t: km.killmail_time, lost, ship: shipName, type: me.ship_type_id || null, sysId: km.solar_system_id, n: (km.attackers || []).length, sys: s ? s.n : String(km.solar_system_id), sec: s ? dispSec(s.s) : null, region: s ? s.r : null,
           link: `https://zkillboard.com/kill/${km.killmail_id}/`, value });
       }
       result = { days, kills: rows.filter(r => !r.lost).length, losses: rows.filter(r => r.lost).length, more: inWin.length >= 30, recent: rows.slice(0, 5) };
@@ -733,7 +734,7 @@ async function recentActivity(cid) {
   return result;
 }
 function showCard(d) {
-  card.data = Object.assign({ v: Date.now() }, d);
+  card.data = Object.assign({ v: Date.now(), img: process.env.IMG_BASE || "https://images.evetech.net" }, d);
   const W = 340, H = 470;
   let px = d.at || [0, 0], a = settings.localArea;
   let dip = { x: px[0], y: px[1] };
@@ -949,6 +950,7 @@ function startServer() {
         else if (c === "pickcancel") { if (pickWin && !pickWin.isDestroyed()) pickWin.close(); }
         else if (c === "snap") onSnapKey(); else if (c === "quit") app.quit();
         else if (c === "cardclose") hideCard();
+        else if (c === "cardhold") { clearTimeout(card.timer); if (!j.on && card.data && card.data.state === "ok") card.timer = setTimeout(hideCard, 8000); }
         else if (c === "esilogin") openLogin();
         else if (c === "update-check") { if (autoUpdater && app.isPackaged) autoUpdater.checkForUpdates().catch(() => { }); }
         else if (c === "update-install") { if (upd.state === "ready") { app.isQuitting = true; autoUpdater.quitAndInstall(false, true); } }
