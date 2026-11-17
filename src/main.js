@@ -526,7 +526,7 @@ async function onMiddleClick(x, y) {
   showCard({ state: "loading", name: lines[0].t, at: [x, y] });
   const m = await resolveOcrName(lines[0].t);
   if (seq !== card.seq) return;
-  if (!m) return showCard({ state: "error", msg: `read "${lines[0].t}" but no pilot matches. Copy Local once (Ctrl+A, Ctrl+C) and the radar can match against it.`, at: [x, y] });
+  if (!m) return showCard({ state: "error", msg: `read "${lines[0].t}" but no pilot matches. Copy Local once (Ctrl+A, Ctrl+C) — the radar then matches against those exact names, including long names Local cuts off.`, at: [x, y] });
   await lookupPilot(m.name, [x, y], seq, m.how === "exact" ? null : lines[0].t);
 }
 // ---- OCR name correction
@@ -535,7 +535,8 @@ async function onMiddleClick(x, y) {
 //     using an edit distance where look-alike letters are almost free;
 //  2) otherwise ask ESI which look-alike spellings exist (one batched /universe/ids call, no login).
 const CONF = [["l", "I"], ["l", "1"], ["I", "1"], ["i", "l"], ["i", "j"], ["O", "0"], ["o", "0"], ["O", "Q"], ["O", "D"], ["S", "5"], ["s", "5"], ["B", "8"],
-  ["Z", "2"], ["z", "2"], ["g", "q"], ["g", "9"], ["G", "6"], ["e", "c"], ["a", "o"], ["u", "v"], ["n", "h"], ["t", "f"], ["T", "7"], ["A", "4"], ["E", "F"], ["c", "o"]];
+  ["Z", "2"], ["z", "2"], ["g", "q"], ["g", "9"], ["G", "6"], ["e", "c"], ["a", "o"], ["u", "v"], ["n", "h"], ["t", "f"], ["T", "7"], ["A", "4"], ["E", "F"], ["c", "o"],
+  ["y", "g"], ["y", "v"], ["Y", "V"], ["r", "t"], ["k", "x"], ["C", "G"], ["P", "R"], ["H", "N"], ["M", "N"], ["U", "V"], ["w", "vv"]];
 const CONF_SET = new Set(CONF.flatMap(([a, b]) => [a + b, b + a]));
 const MULTI = [["rn", "m"], ["vv", "w"], ["cl", "d"], ["li", "h"], ["ri", "n"], ["nn", "m"], ["iI", "il"]];
 function subCost(a, b) { if (a === b) return 0; if (a.toLowerCase() === b.toLowerCase()) return 0.1; return CONF_SET.has(a + b) ? 0.25 : 1; }
@@ -549,6 +550,14 @@ function ocrDist(a, b) {   // weighted Damerau-ish edit distance with look-alike
     D[i][j] = v;
   }
   return D[n][m];
+}
+function nameScore(t, n) {
+  // full match, or t is the (possibly misread) start of a longer name that Local / OCR cut off
+  const T = t.replace(/\s+/g, ""), N = n.replace(/\s+/g, "");
+  let d = ocrDist(t, n) / Math.max(n.length, 3);
+  if (T.length >= 4 && N.length > T.length)
+    for (let L = T.length - 1; L <= Math.min(N.length, T.length + 2); L++) d = Math.min(d, ocrDist(T, N.slice(0, L)) / T.length + 0.03);
+  return d;
 }
 function knownNames() {
   // Ctrl+C on Local is exact text from EVE, so pasted names are the best reference (kept for 2 h)
@@ -570,9 +579,10 @@ function variants(t, cap = 400) {   // look-alike spellings of an OCR read, orig
 async function resolveOcrName(t) {
   // 1) known names
   let best = null;
-  for (const n of knownNames()) { const d = ocrDist(t, n) / Math.max(n.length, 3); if (!best || d < best.d) best = { name: n, d }; }
+  let second = 9;
+  for (const n of knownNames()) { const d = nameScore(t, n); if (!best || d < best.d) { if (best) second = best.d; best = { name: n, d }; } else if (d < second) second = d; }
   if (best && best.d === 0) return { name: best.name, how: "exact" };
-  if (best && best.d <= 0.22) return { name: best.name, how: "known" };
+  if (best && best.d <= 0.22 && second - best.d > 0.04) return { name: best.name, how: "known" };   // must be clearly the best
   // 2) ESI: which look-alike spellings are real characters?
   const vs = variants(t);
   for (let k = 0; k < vs.length; k += 250) {
