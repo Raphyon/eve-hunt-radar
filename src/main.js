@@ -542,12 +542,13 @@ async function syncHook() {
   const j = await helperCmd("HOOK " + (want ? "ON" : "OFF"), 3000); if (!j.error) hookOn = want;
 }
 const card = { win: null, data: null, seq: 0 };
-function insideArea(x, y) { const a = settings.localArea; return a && x >= a[0] && x <= a[0] + a[2] && y >= a[1] && y <= a[1] + a[3]; }
+const AREA_SLACK = 14;   // px: clicks just outside the marked box (e.g. a cut-off top/bottom row) still count
+function insideArea(x, y) { const a = settings.localArea, m = AREA_SLACK; return a && x >= a[0] - m && x <= a[0] + a[2] + m && y >= a[1] - m && y <= a[1] + a[3] + m; }
 async function onMiddleClick(x, y) {
   if (!settings.lookupOn) return;
   if (!insideArea(x, y)) { hideCard(); return; }          // middle-click anywhere else closes the card
-  const a = settings.localArea, half = 26;
-  const top = Math.max(a[1], y - half), bot = Math.min(a[1] + a[3], y + half);
+  // capture a strip centred on the click, NOT clamped to the marked box, so the top/bottom rows are never cut in half
+  const a = settings.localArea, half = 28, top = y - half, bot = y + half;
   const seq = ++card.seq;
   showCard({ state: "reading", at: [x, y] });
   const j = await helperCmd(`OCRL ${a[0]} ${top} ${a[2]} ${bot - top} ${path.join(os.tmpdir(), "hunt_radar_row.png")}`, 15000);
@@ -555,7 +556,9 @@ async function onMiddleClick(x, y) {
   if (j.error) return showCard({ state: "error", msg: "couldn't read that row: " + j.error, at: [x, y] });
   let lines = Array.isArray(j.lines) ? j.lines : (j.lines ? [j.lines] : []);
   const cy = y - top;
-  lines = lines.map(l => ({ t: cleanOcrLine(String(l.t || "")), dy: Math.abs((+l.y || 0) - cy) })).filter(l => l.t).sort((p, q) => p.dy - q.dy);
+  // prefer the line whose box contains the cursor; otherwise the nearest one
+  lines = lines.map(l => { const yc = +l.y || 0, hh = (+l.h || 14) / 2 + 2; return { t: cleanOcrLine(String(l.t || "")), dy: Math.abs(yc - cy) - (Math.abs(yc - cy) <= hh ? 1000 : 0) }; })
+    .filter(l => l.t).sort((p, q) => p.dy - q.dy);
   if (!lines.length) return showCard({ state: "error", msg: "no name under the cursor", at: [x, y] });
   showCard({ state: "loading", name: lines[0].t, at: [x, y] });
   const m = await resolveOcrName(lines[0].t);
