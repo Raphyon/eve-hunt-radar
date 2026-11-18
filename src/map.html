@@ -476,7 +476,7 @@ function wlSave() {
   RA.ws = { g, t }; wlSummary(); renderFeed(); drawPulses();
 }
 document.body.insertAdjacentHTML("beforeend", `<div id="wlPop"><div id="wlBox">
-  <div class="wlh"><b>Ship watchlists</b><span class="sub">Click a box: <span class="tri s1">✓</span> watched (feed &amp; map) → <span class="tri s2">✗</span> pinged (beeps) → off. Set a whole class, or open it for single ships.</span><span id="wlX" title="Close">✕</span></div>
+  <div class="wlh"><b>Ship watchlists</b><span class="sub">Click a box: <span class="tri s1">✓</span> watched (map &amp; kill popups) → <span class="tri s2">✗</span> pinged (beeps) → off. Set a whole class, or open it for single ships.</span><span id="wlX" title="Close">✕</span></div>
   <div class="wlb"><div id="wlLists"></div>
     <div id="wlRight"><input id="wlQ" type="text" placeholder="Search ships or classes…"><div id="wlTree"></div></div></div>
   <div id="wlAsk"><div class="ab"><div id="wlAskMsg"></div><div class="row" style="justify-content:flex-end"><button id="wlNo">Cancel</button><button id="wlYes" class="danger">OK</button></div></div></div></div></div>`);
