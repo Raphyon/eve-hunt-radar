@@ -44,7 +44,7 @@ maps can be swapped for your own image or removed there too (it's off in these s
 ![Big map, zoomed in](docs/map.png)
 
 1. **Find system** — type a name, Enter jumps there.
-2. **Kills popup** — click a system with a kill ring to see what died, who killed it and the zKill link.
+2. **Kills panel** — lists every kill with a ✗ pinged ship (click the system name to jump there). Click a system to see just its kills; ✕ or Esc goes back, and ✕ again folds the panel to one line.
 3. **Watched system** (red outline) — your camps / hunting grounds, set under *Targets*.
 4. **You** (green ring) and a **kill ring** (magenta = watched ship).
 5. **Heat badge** — NPC kills last hour, red = top 3 near you.

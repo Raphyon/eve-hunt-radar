@@ -42,6 +42,7 @@ tr.cl{cursor:pointer}tr.cl:hover td{background:#1c232b}
 #zoom{position:absolute;left:10px;bottom:10px;display:flex;gap:4px}
 #sysPop{position:absolute;left:10px;top:48px;width:340px;max-height:calc(100% - 110px);overflow:auto;background:rgba(21,26,32,.97);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:none;box-shadow:0 6px 24px rgba(0,0,0,.5);z-index:6}
 #sysPop.on{display:block}
+#sysPop.min{padding:6px 12px;cursor:pointer}#sysPop.min .lh{margin:0}
 #sysPop .lh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
 #sysPop .lh span:last-child{cursor:pointer;color:var(--mut);font-size:15px;padding:0 4px}
 #legPop{position:absolute;left:10px;bottom:52px;width:320px;background:rgba(21,26,32,.97);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:none;box-shadow:0 6px 24px rgba(0,0,0,.5);z-index:5}
@@ -111,7 +112,7 @@ button.danger{background:#5a1f1c;border-color:#8a2e29}button.danger:hover{backgr
   <h1>New Eden</h1>
   <div class="sub">CCP's in-game 2D map layout, all known space; highsec dimmed (never tracked).<br>
   <b>Move:</b> drag to pan, scroll to zoom (names appear when zoomed in), <i>Find system</i> + Enter to jump there, <code>Ctrl+Shift+B</code> to open/close this window.<br>
-  <b>Read:</b> rings = kills in the last 30 min (magenta = watched ship), red/orange dots and glows = busiest systems near you. Click a system with a ring to see its kills.</div>
+  <b>Read:</b> rings = kills in the last 30 min (magenta = watched ship), red/orange dots and glows = busiest systems near you. The top-left panel lists every kill with a ✗ pinged ship; click a system to see its own kills instead (✕ or Esc goes back).</div>
 
 
   <h2>Targets</h2>

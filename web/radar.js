@@ -23,6 +23,7 @@ $("tIgn").addEventListener("input", () => computeTargets());
 ["wJOn", "wJ", "wLOn", "wL", "spL", "spN", "spP", "bGap"].forEach(id => $(id).addEventListener("change", pushSettings)); $("pNear").onchange = pushSettings; $("pNearR").onchange = pushSettings;
 
 const watched = p => RA.ws.t.has(p.ship) || RA.ws.g.has(p.group);
+const pinged = p => !!p && !!RA.wp && (RA.wp.t.has(p.ship) || RA.wp.g.has(p.group));        // ✗ ships (the ones that beep)
 
 // ---------------- ship watchlist editor (popup) ----------------
 const TYPES = Object.entries(SHIPDB.types).map(([id, [g, n]]) => ({ id: +id, g: +g, n })).sort((a, b) => a.n.localeCompare(b.n));
@@ -36,7 +37,8 @@ function wlSummary() {
 function wlSave() {
   fetch("/settings", { method: "POST", body: JSON.stringify({ watchlists: WL }) }).catch(() => {});
   const g = new Set(), t = new Set(); WL.filter(l => l.on !== false).forEach(l => { ["groups", "pgroups"].forEach(k => (l[k] || []).forEach(x => g.add(+x))); ["types", "ptypes"].forEach(k => (l[k] || []).forEach(x => t.add(+x))); });
-  RA.ws = { g, t }; wlSummary(); renderFeed(); drawPulses();
+  const pg = new Set(), pt = new Set(); WL.filter(l => l.on !== false).forEach(l => { (l.pgroups || []).forEach(x => pg.add(+x)); (l.ptypes || []).forEach(x => pt.add(+x)); });
+  RA.ws = { g, t }; RA.wp = { g: pg, t: pt }; wlSummary(); renderFeed(); drawPulses();
 }
 document.body.insertAdjacentHTML("beforeend", `<div id="wlPop"><div id="wlBox">
   <div class="wlh"><b>Ship watchlists</b><span class="sub">Click a box: <span class="tri s1">✓</span> watched (map &amp; kill popups) → <span class="tri s2">✗</span> pinged (beeps) → off. Set a whole class, or open it for single ships.</span><span id="wlX" title="Close">✕</span></div>
@@ -127,26 +129,47 @@ const agoS = t => { const s = Math.round(Date.now() / 1000 - t); return s < 90 ?
 const jumpTo = root => root.querySelectorAll("[data-id]").forEach(a => a.onclick = ev => { ev.preventDefault(); if (S[+a.dataset.id]) select(+a.dataset.id, true); });
 
 // kills in one system, shown in a popup on the map when you click it (the long feed list is gone)
-function killRow(e) {
+function killRow(e, withSys) {
   const I = interest(e), t = new Date(Date.parse(e.time)), m = Math.round(ageMin(e));
-  const hdr = `<div class="fh"><span>${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span> <span class="sub">${m < 90 ? m + "m" : Math.round(m / 60) + "h"} ago</span><span class="fv">${isk(e.val)}</span></div>`;
+  const where = withSys ? ` <a href="#" data-id="${e.sys}" class="fs">${esc(e.sysName || (S[e.sys] || {}).n)}</a> <span class="sub">${(e.sec ?? 0).toFixed(1)}${e.region ? " · " + esc(e.region) : ""}</span>` : "";
+  const hdr = `<div class="fh"><span>${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>${where} <span class="sub">${m < 90 ? m + "m" : Math.round(m / 60) + "h"} ago</span><span class="fv">${isk(e.val)}</span></div>`;
   const atk = I.a.length ? I.a.map(who).join("<br>") + (e.attackers.length > I.a.length ? `<br><span class="sub">+${e.attackers.length - I.a.length} other attacker(s)</span>` : "")
     : `<span class="sub">${e.attackers.length} attacker(s): ${e.attackers.slice(0, 3).map(p => esc(p.shipName)).join(", ")}${e.attackers.length > 3 ? "…" : ""}</span>`;
   return `<div class="fi ${I.hit ? "hit" : ""}">${hdr}<div><span class="sub">killed</span> ${who(e.victim)}</div><div><span class="sub">by</span> ${atk}</div><a class="zk" href="${e.link}" target="_blank" rel="noopener">zKill ↗</a></div>`;
 }
-let popSys = null;
-window.showSysKills = id => {
-  const list = RA.evs.filter(e => e.sys === id).slice().reverse();
-  if (!list.length) { popSys = null; $("sysPop").classList.remove("on"); return; }
-  popSys = id; const s = S[id];
-  $("sysPop").innerHTML = `<div class="lh"><span><b>${esc(s.n)}</b> <span class="sub">${dispSec(s.s).toFixed(1)} · ${esc(s.r)} · ${list.length} kill${list.length > 1 ? "s" : ""}</span></span><span id="popX" title="Close (Esc)">✕</span></div>` + list.slice(0, 20).map(killRow).join("");
-  $("popX").onclick = () => { popSys = null; $("sysPop").classList.remove("on"); };
-  $("sysPop").classList.add("on");
-};
-document.addEventListener("keydown", e => { if (e.key === "Escape" && popSys) { popSys = null; $("sysPop").classList.remove("on"); } });
+// The popup in the map's top-left corner: a clicked system's kills, or (no system clicked) every kill with a pinged ship.
+// ✕ / Esc on a system goes back to the pinged list; on the pinged list it folds down to a one-line bar.
+let popSys = null, popMin = false, popSig = "";
+const pingedEv = e => e.attackers.some(pinged) || ($("pVictim").checked && pinged(e.victim));
+function renderPop() {
+  const P = $("sysPop"); let list, head;
+  if (popSys) {
+    list = RA.evs.filter(e => e.sys === popSys).slice().reverse();
+    if (!list.length) popSys = null;
+  }
+  if (popSys) { const s = S[popSys];
+    head = `<span><b>${esc(s.n)}</b> <span class="sub">${dispSec(s.s).toFixed(1)} · ${esc(s.r)} · ${list.length} kill${list.length > 1 ? "s" : ""}</span></span><span id="popX" title="Back to pinged kills (Esc)">✕</span>`;
+  } else {
+    list = RA.evs.filter(pingedEv).slice().reverse();
+    head = `<span><b>Pinged kills</b> <span class="sub">· ${list.length}${popMin ? "" : " · click a system for its kills"}</span></span><span id="popX" title="${popMin ? "Show" : "Fold away (Esc)"}">${popMin ? "▾" : "✕"}</span>`;
+  }
+  const body = popSys ? list.slice(0, 20).map(e => killRow(e, false)).join("")
+    : popMin ? "" : (list.slice(0, 30).map(e => killRow(e, true)).join("") || `<div class="sub">No kills with a ✗ pinged ship yet. Set them under Watched ships.</div>`);
+  const sig = [popSys, popMin, list.length, list[0] && list[0].n, Math.floor(Date.now() / 60000)].join("|");
+  if (sig === popSig && P.classList.contains("on")) return;          // nothing new: keep the scroll position
+  popSig = sig; const top = P.scrollTop;
+  P.innerHTML = `<div class="lh">${head}</div>` + body;
+  P.classList.toggle("min", !popSys && popMin); P.classList.add("on");
+  P.scrollTop = top;
+  $("popX").onclick = e => { e.stopPropagation(); if (popSys) popSys = null; else popMin = !popMin; renderPop(); };
+  if (!popSys && popMin) P.querySelector(".lh").onclick = () => { popMin = false; renderPop(); };
+  jumpTo(P);
+}
+window.showSysKills = id => { popSys = RA.evs.some(e => e.sys === id) ? id : null; if (popSys) popMin = false; renderPop(); };
+document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (popSys) popSys = null; else popMin = true; renderPop(); });
 $("sysPop").addEventListener("pointerdown", e => e.stopPropagation());
 $("sysPop").addEventListener("wheel", e => e.stopPropagation());
-function renderFeed() { if (popSys) showSysKills(popSys); }      // keep an open popup up to date
+function renderFeed() { renderPop(); }      // called on every poll: keeps the popup up to date
 function renderChars() {
   const cs = RA.chars.filter(c => c.running);
   $("chars").innerHTML = cs.length ? cs.map(c => `<div class="crow"><span style="color:#3ddc84">${c.active ? "▶" : "&nbsp;&nbsp;"}</span> <b>${esc(c.name)}</b> ${c.sysName ? (S[c.sys] ? `<a href="#" data-id="${c.sys}" class="fs">${esc(c.sysName)}</a>` : esc(c.sysName)) + ` <span class="sub">${c.sec != null ? c.sec.toFixed(1) : ""}</span>` : `<span class="sub">system unknown until you jump</span>`}</div>`).join("")
@@ -318,6 +341,7 @@ async function poll() {
     if (RA.evs.length > 600) RA.evs.splice(0, RA.evs.length - 600);
     $("wCnt").textContent = `${d.watchCount} systems currently watched` + (d.watchCount ? "" : " — log in and jump once so the radar knows where you are");
     RA.ws = { g: new Set((d.watch || {}).g || []), t: new Set((d.watch || {}).t || []) };
+    RA.wp = { g: new Set((d.watch || {}).pg || []), t: new Set((d.watch || {}).pt || []) };
     applyUi(d); renderApp(d); renderJump(d); RA.jump = d.jump || []; RA.jumpReach = d.jumpReach || []; RA.si = d.sysInfo || {}; RA.watchIds = new Set(d.watchIds || []); window.IGNORED = new Set(d.ignoredIds || []);
     renderFeed(); renderChars(); renderLocal(); renderBest(); drawPulses(); drawHeat();
     // nodes are 5k+ elements: only rebuild when what they show changed (Local counts, ignore list)
