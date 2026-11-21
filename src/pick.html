@@ -9,7 +9,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:rgba(0,0,0,.38);cursor
 <div id="msg">Drag a box over the <b>names</b> in Local's member list<br><small>Esc to cancel</small></div>
 <div id="box"></div>
 <script>
-const q = new URLSearchParams(location.search), OX = +q.get("ox") || 0, OY = +q.get("oy") || 0;
+const q = new URLSearchParams(location.search), OX = +q.get("ox") || 0, OY = +q.get("oy") || 0, D = +q.get("d") || 0;
 const box = document.getElementById("box"); let s = null;
 const post = b => fetch("/cmd", { method: "POST", body: JSON.stringify(b) });
 addEventListener("mousedown", e => { s = [e.clientX, e.clientY]; box.style.display = "block"; mv(e); });
@@ -18,7 +18,7 @@ function mv(e) { const x = Math.min(s[0], e.clientX), y = Math.min(s[1], e.clien
 addEventListener("mouseup", e => {
   if (!s) return; const x = Math.min(s[0], e.clientX), y = Math.min(s[1], e.clientY), w = Math.abs(e.clientX - s[0]), h = Math.abs(e.clientY - s[1]); s = null;
   if (w < 20 || h < 20) { box.style.display = "none"; return; }
-  post({ cmd: "picked", rect: { x: x + OX, y: y + OY, w, h } });
+  post({ cmd: "picked", rect: { x: x + OX, y: y + OY, w, h }, d: D });
 });
 addEventListener("keydown", e => { if (e.key === "Escape") post({ cmd: "pickcancel" }); });
 </script></body></html>

@@ -803,23 +803,30 @@ function openLogin() {
   const w = new BrowserWindow({ width: 520, height: 760, title: "EVE login — Hunt Radar", autoHideMenuBar: true, backgroundColor: "#0d1014" });
   w.loadURL(`http://127.0.0.1:${PORT}/login`);
 }
+// One picker window per monitor: a single window stretched over several monitors gets clamped by Windows
+// (especially with different scaling per monitor), which made it impossible to mark Local on a secondary screen.
+let pickWins = [];
+function closePickers() { pickWins.forEach(w => { if (!w.isDestroyed()) w.close(); }); pickWins = []; }
 function pickArea() {
-  const ds = screen.getAllDisplays();
-  const x0 = Math.min(...ds.map(d => d.bounds.x)), y0 = Math.min(...ds.map(d => d.bounds.y));
-  const x1 = Math.max(...ds.map(d => d.bounds.x + d.bounds.width)), y1 = Math.max(...ds.map(d => d.bounds.y + d.bounds.height));
-  const w = new BrowserWindow({ x: x0, y: y0, width: x1 - x0, height: y1 - y0, transparent: true, frame: false, alwaysOnTop: true, skipTaskbar: true, resizable: false, movable: false, hasShadow: false, backgroundColor: "#00000000" });
-  w.setAlwaysOnTop(true, "screen-saver");
-  w.loadURL(`http://127.0.0.1:${PORT}/pick?ox=${x0}&oy=${y0}`);
-  pickWin = w;
+  closePickers();
+  pickWins = screen.getAllDisplays().map((d, i) => {
+    const b = d.bounds;
+    const w = new BrowserWindow({ x: b.x, y: b.y, width: b.width, height: b.height, transparent: true, frame: false, alwaysOnTop: true, skipTaskbar: true, resizable: false, movable: false, hasShadow: false, backgroundColor: "#00000000" });
+    w.setBounds(b);                                   // re-apply after creation so Windows uses this monitor's scale
+    w.setAlwaysOnTop(true, "screen-saver");
+    w.loadURL(`http://127.0.0.1:${PORT}/pick?ox=${b.x}&oy=${b.y}&d=${i}`);
+    w.on("closed", () => { pickWins = pickWins.filter(x => x !== w); });
+    return w;
+  });
 }
-let pickWin = null;
-function savePickedArea(r) {
-  // r is in DIP screen coordinates -> convert to physical pixels for the screenshot
+function savePickedArea(r, di) {
+  // r is in DIP screen coordinates of the monitor it was drawn on -> physical pixels for the screenshot
   let rect = { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.w), height: Math.round(r.h) };
-  if (process.platform === "win32") { try { rect = screen.dipToScreenRect(null, rect); } catch { } }
+  const win = pickWins[di] && !pickWins[di].isDestroyed() ? pickWins[di] : null;
+  if (process.platform === "win32") { try { rect = screen.dipToScreenRect(win, rect); } catch { } }
   settings.localArea = [rect.x, rect.y, rect.width, rect.height]; saveSettings(); syncHook();
   Object.assign(snap, { msg: "Local area saved — middle-click a name in Local", t: now() });
-  if (pickWin && !pickWin.isDestroyed()) pickWin.close();
+  closePickers();
 }
 // ---- own background image: copied into the settings folder so it survives the original being moved
 function clearBackground() {
@@ -957,8 +964,8 @@ function startServer() {
         const c = j.cmd;
         if (c === "map") openMap(); else if (c === "lock") setEdit(false); else if (c === "edit") setEdit(true);
         else if (c === "mode") toggleOverlay();
-        else if (c === "pick") pickArea(); else if (c === "picked") savePickedArea(j.rect);
-        else if (c === "pickcancel") { if (pickWin && !pickWin.isDestroyed()) pickWin.close(); }
+        else if (c === "pick") pickArea(); else if (c === "picked") savePickedArea(j.rect, +j.d || 0);
+        else if (c === "pickcancel") closePickers();
         else if (c === "quit") app.quit();
         else if (c === "cardclose") hideCard();
         else if (c === "bgpick") pickBackground();
